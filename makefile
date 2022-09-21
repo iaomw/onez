@@ -3,12 +3,14 @@ LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
 
 VulkanTest: main.cpp
 	g++ $(CFLAGS) -o VulkanTest main.cpp $(LDFLAGS) -g -Wall
+default:
+	VulkanTest
 
 .PHONY: test clean
 
 Shaders:
-	glslc ./shaders/shader.vert -o vert.spv
-	glslc ./shaders/shader.frag -o frag.spv
+	cd shaders && glslc shader.vert -o vert.spv
+	cd shaders && glslc shader.frag -o frag.spv
 
 test: Shaders VulkanTest
 	./VulkanTest
