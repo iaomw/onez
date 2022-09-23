@@ -1,4 +1,6 @@
-CFLAGS = -std=c++17 -O2
+STB_PATH = $(HOME)/stb
+
+CFLAGS = -std=c++17 -O2 -I$(STB_PATH)
 LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
 
 VulkanTest: main.cpp
