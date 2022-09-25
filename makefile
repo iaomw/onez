@@ -1,8 +1,15 @@
-#CFLAGS = -std=c++17 -O2 #-I$(STB_PATH)
-#LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
+CFLAGS = -std=c++17 -O2 -I $(VULKAN_SDK)/include -I .
 
-CFLAGS = -std=c++17 -O2 -I $(VULKAN_SDK)/include #-I .
-LDFLAGS = -L$(VULKAN_SDK)/lib `pkg-config --static --libs glfw3` -lvulkan
+UNAME_S := $(shell uname -s)
+
+ifeq ($(UNAME_S), Darwin)        # Mac OS X
+	LDFLAGS = -L$(VULKAN_SDK)/lib `pkg-config --static --libs glfw3` -lvulkan
+else
+	LDFLAGS = -lglfw -lvulkan -ldl -lpthread -lX11 -lXxf86vm -lXrandr -lXi
+endif
+
+# ifeq ($(detected_OS),Linux)
+# endif
 
 default: shaders vktest
 

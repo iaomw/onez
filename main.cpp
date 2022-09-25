@@ -35,7 +35,7 @@ const std::vector<const char*> validationLayers = {
 
 const std::vector<const char*> deviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
- #ifdef __APPLE__
+#ifdef __APPLE__ //https://github.com/KhronosGroup/MoltenVK/issues/1626
     "VK_KHR_portability_subset"
 #endif
 };
