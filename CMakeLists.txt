@@ -13,14 +13,13 @@ add_executable(vktest)
 file(GLOB sources CONFIGURE_DEPENDS *.h *.cpp)
 target_sources(vktest PUBLIC main.cpp)
 
-find_package(glfw3 REQUIRED)
 find_package(Vulkan REQUIRED)
+target_link_libraries(${PROJECT_NAME} ${Vulkan_LIBRARIES})
+target_include_directories(${PROJECT_NAME} PUBLIC ${Vulkan_INCLUDE_DIR})
 
-# target_link_libraries(${PROJECT_NAME} ${Vulkan_LIBRARIES})
-# target_include_directories(${PROJECT_NAME} PUBLIC ${Vulkan_INCLUDE_DIR})
-
-target_link_libraries(${PROJECT_NAME} glfw vulkan)
-# target_include_directories(${PROJECT_NAME} PUBLIC ${GLFW_INCLUDE_DIRS})
+find_package(glfw3 REQUIRED)
+target_link_libraries(${PROJECT_NAME} glfw)
+target_include_directories(${PROJECT_NAME} PUBLIC ${GLFW_INCLUDE_DIRS})
 
 include_directories(external)
 #include_directories(external/glm)
