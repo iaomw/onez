@@ -1,13 +1,21 @@
 cmake_minimum_required(VERSION 3.13 FATAL_ERROR)
 
+set(PROJECT_NAME vktest)
+project(${PROJECT_NAME} C CXX)
+
+if (NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Debug)
+endif()
+message("${CMAKE_BUILD_TYPE} build")
+
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_EXTENSIONS ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(PROJECT_NAME vktest)
-project(${PROJECT_NAME})
-
-#set(CMAKE_BUILD_TYPE Debug)
+find_program(HAS_CLANGD "clangd")
+if(HAS_CLANGD)
+  set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+endif()
 
 add_executable(vktest)
 file(GLOB sources CONFIGURE_DEPENDS *.h *.cpp)
@@ -21,6 +29,38 @@ find_package(glfw3 REQUIRED)
 target_link_libraries(${PROJECT_NAME} glfw)
 target_include_directories(${PROJECT_NAME} PUBLIC ${GLFW_INCLUDE_DIRS})
 
+find_path(STB_INCLUDE_DIRS "stb_c_lexer.h")
+target_include_directories(${PROJECT_NAME} PRIVATE ${STB_INCLUDE_DIRS})
+
+find_package(tinyobjloader CONFIG REQUIRED)
+target_link_libraries(${PROJECT_NAME} tinyobjloader::tinyobjloader)
+
+find_package(unofficial-spirv-reflect CONFIG REQUIRED)
+target_link_libraries(${PROJECT_NAME} unofficial::spirv-reflect::spirv-reflect)
+
+# Google Shader compiler 
+# find_package(unofficial-shaderc CONFIG REQUIRED)
+# target_link_libraries(${PROJECT_NAME} unofficial::shaderc::shaderc)
+# find_package(unofficial-shaderc_util CONFIG REQUIRED)
+# target_link_libraries(${PROJECT_NAME} unofficial::shaderc_util::shaderc_util)
+
+include(FetchContent)
+# declare Catch2
+FetchContent_Declare(glslang                              # name of the content
+  GIT_REPOSITORY https://github.com/KhronosGroup/glslang  # the repository
+  GIT_TAG        11.12.0                                 # the tag
+  )
+# make available
+FetchContent_MakeAvailable(glslang)
+target_link_libraries(${PROJECT_NAME}  glslang::glslang)
+
+# find_package(glslang CONFIG REQUIRED)
+# target_link_libraries(${PROJECT_NAME} glslang)
+
+set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+find_package(Threads REQUIRED)
+                                      
 include_directories(external)
 #include_directories(external/glm)
 #include_directories(external/gli)
