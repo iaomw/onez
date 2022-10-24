@@ -39,14 +39,27 @@ find_package(unofficial-spirv-reflect CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} unofficial::spirv-reflect::spirv-reflect)
 
 include(FetchContent)
-Set(FETCHCONTENT_QUIET FALSE)
+Set(FETCHCONTENT_QUIET OFF)
+
+set(SPIRV_REFLECT_BUILD_TESTS OFF)
+FetchContent_Declare(
+  spirv-reflect
+  GIT_REPOSITORY https://github.com/KhronosGroup/SPIRV-Reflect.git
+  GIT_TAG        sdk-1.3.224.1
+  SOURCE_DIR     ${CMAKE_CURRENT_SOURCE_DIR}/external/spirv-reflect
+  GIT_SHALLOW TRUE
+  GIT_PROGRESS TRUE
+)
+# FetchContent_MakeAvailable(spirv-reflect)
+# FetchContent_Populate(spirv-reflect)
+# add_subdirectory(${spirv-reflect_SOURCE_DIR} ${spirv-reflect_BINARY_DIR})
+# target_link_libraries(${PROJECT_NAME} spirv-reflect)
 
 FetchContent_Declare(
   glslang
   GIT_REPOSITORY https://github.com/KhronosGroup/glslang.git
-  GIT_TAG        11.12.0 # release-1.10.0
+  GIT_TAG        11.12.0
   SOURCE_DIR     ${CMAKE_CURRENT_SOURCE_DIR}/external/glslang
-  
   GIT_SHALLOW TRUE
   GIT_PROGRESS TRUE
 )
