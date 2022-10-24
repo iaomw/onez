@@ -38,3 +38,5 @@
 *.app
 *.json
 *.idx
+
+build/

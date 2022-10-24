@@ -38,24 +38,40 @@ target_link_libraries(${PROJECT_NAME} tinyobjloader::tinyobjloader)
 find_package(unofficial-spirv-reflect CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} unofficial::spirv-reflect::spirv-reflect)
 
+include(FetchContent)
+Set(FETCHCONTENT_QUIET FALSE)
+
+FetchContent_Declare(
+  glslang
+  GIT_REPOSITORY https://github.com/KhronosGroup/glslang.git
+  GIT_TAG        11.12.0 # release-1.10.0
+  SOURCE_DIR     ${CMAKE_CURRENT_SOURCE_DIR}/external/glslang
+  
+  GIT_SHALLOW TRUE
+  GIT_PROGRESS TRUE
+)
+FetchContent_MakeAvailable(glslang)
+
+# add_subdirectory(external/glslang)
+
+# include_directories(external/glslang)
+# include_directories(external/glslang/src)
+# include_directories(external/glslang/StandAlone)
+# include_directories(external/glslang/glslang/Include)
+
+# set_property(TARGET glslang       PROPERTY FOLDER "ThirdPartyLibraries/glslang")
+# set_property(TARGET OGLCompiler   PROPERTY FOLDER "ThirdPartyLibraries/glslang")
+# set_property(TARGET OSDependent   PROPERTY FOLDER "ThirdPartyLibraries/glslang")
+# set_property(TARGET SPIRV         PROPERTY FOLDER "ThirdPartyLibraries/glslang")
+# set_property(TARGET SPVRemapper   PROPERTY FOLDER "ThirdPartyLibraries/glslang")
+
+target_link_libraries(${PROJECT_NAME} glslang SPIRV)
+
 # Google Shader compiler 
 # find_package(unofficial-shaderc CONFIG REQUIRED)
 # target_link_libraries(${PROJECT_NAME} unofficial::shaderc::shaderc)
 # find_package(unofficial-shaderc_util CONFIG REQUIRED)
 # target_link_libraries(${PROJECT_NAME} unofficial::shaderc_util::shaderc_util)
-
-include(FetchContent)
-# declare Catch2
-FetchContent_Declare(glslang                              # name of the content
-  GIT_REPOSITORY https://github.com/KhronosGroup/glslang  # the repository
-  GIT_TAG        11.12.0                                 # the tag
-  )
-# make available
-FetchContent_MakeAvailable(glslang)
-target_link_libraries(${PROJECT_NAME}  glslang::glslang)
-
-# find_package(glslang CONFIG REQUIRED)
-# target_link_libraries(${PROJECT_NAME} glslang)
 
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)
