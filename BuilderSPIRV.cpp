@@ -1,194 +1,207 @@
-#include "glslang/SPIRV/GlslangToSpv.h"
+#include "BuilderSPIRV.h"
+#include "glslang_c_shader_types.h"
 
-struct SpirvHelper
+#include <StandAlone/ResourceLimits.cpp>
+
+#include <algorithm>
+#include <iostream>
+
+std::string readShaderFile(const char* fileName)
 {
-	static void Init() {
-		glslang::InitializeProcess();
+	FILE* file = fopen(fileName, "r");
+
+	if (!file)
+	{
+		printf("I/O error. Cannot open shader file '%s'\n", fileName);
+		return std::string();
 	}
 
-	static void Finalize() {
-		glslang::FinalizeProcess();
+	fseek(file, 0L, SEEK_END);
+	const auto bytesinfile = ftell(file);
+	fseek(file, 0L, SEEK_SET);
+
+	char* buffer = (char*)alloca(bytesinfile + 1);
+	const size_t bytesread = fread(buffer, 1, bytesinfile, file);
+	fclose(file);
+
+	buffer[bytesread] = 0;
+
+	static constexpr unsigned char BOM[] = { 0xEF, 0xBB, 0xBF };
+
+	if (bytesread > 3)
+	{
+		if (!memcmp(buffer, BOM, 3))
+			memset(buffer, ' ', 3);
 	}
 
-	static void InitResources(TBuiltInResource &Resources) {
-		Resources.maxLights = 32;
-		Resources.maxClipPlanes = 6;
-		Resources.maxTextureUnits = 32;
-		Resources.maxTextureCoords = 32;
-		Resources.maxVertexAttribs = 64;
-		Resources.maxVertexUniformComponents = 4096;
-		Resources.maxVaryingFloats = 64;
-		Resources.maxVertexTextureImageUnits = 32;
-		Resources.maxCombinedTextureImageUnits = 80;
-		Resources.maxTextureImageUnits = 32;
-		Resources.maxFragmentUniformComponents = 4096;
-		Resources.maxDrawBuffers = 32;
-		Resources.maxVertexUniformVectors = 128;
-		Resources.maxVaryingVectors = 8;
-		Resources.maxFragmentUniformVectors = 16;
-		Resources.maxVertexOutputVectors = 16;
-		Resources.maxFragmentInputVectors = 15;
-		Resources.minProgramTexelOffset = -8;
-		Resources.maxProgramTexelOffset = 7;
-		Resources.maxClipDistances = 8;
-		Resources.maxComputeWorkGroupCountX = 65535;
-		Resources.maxComputeWorkGroupCountY = 65535;
-		Resources.maxComputeWorkGroupCountZ = 65535;
-		Resources.maxComputeWorkGroupSizeX = 1024;
-		Resources.maxComputeWorkGroupSizeY = 1024;
-		Resources.maxComputeWorkGroupSizeZ = 64;
-		Resources.maxComputeUniformComponents = 1024;
-		Resources.maxComputeTextureImageUnits = 16;
-		Resources.maxComputeImageUniforms = 8;
-		Resources.maxComputeAtomicCounters = 8;
-		Resources.maxComputeAtomicCounterBuffers = 1;
-		Resources.maxVaryingComponents = 60;
-		Resources.maxVertexOutputComponents = 64;
-		Resources.maxGeometryInputComponents = 64;
-		Resources.maxGeometryOutputComponents = 128;
-		Resources.maxFragmentInputComponents = 128;
-		Resources.maxImageUnits = 8;
-		Resources.maxCombinedImageUnitsAndFragmentOutputs = 8;
-		Resources.maxCombinedShaderOutputResources = 8;
-		Resources.maxImageSamples = 0;
-		Resources.maxVertexImageUniforms = 0;
-		Resources.maxTessControlImageUniforms = 0;
-		Resources.maxTessEvaluationImageUniforms = 0;
-		Resources.maxGeometryImageUniforms = 0;
-		Resources.maxFragmentImageUniforms = 8;
-		Resources.maxCombinedImageUniforms = 8;
-		Resources.maxGeometryTextureImageUnits = 16;
-		Resources.maxGeometryOutputVertices = 256;
-		Resources.maxGeometryTotalOutputComponents = 1024;
-		Resources.maxGeometryUniformComponents = 1024;
-		Resources.maxGeometryVaryingComponents = 64;
-		Resources.maxTessControlInputComponents = 128;
-		Resources.maxTessControlOutputComponents = 128;
-		Resources.maxTessControlTextureImageUnits = 16;
-		Resources.maxTessControlUniformComponents = 1024;
-		Resources.maxTessControlTotalOutputComponents = 4096;
-		Resources.maxTessEvaluationInputComponents = 128;
-		Resources.maxTessEvaluationOutputComponents = 128;
-		Resources.maxTessEvaluationTextureImageUnits = 16;
-		Resources.maxTessEvaluationUniformComponents = 1024;
-		Resources.maxTessPatchComponents = 120;
-		Resources.maxPatchVertices = 32;
-		Resources.maxTessGenLevel = 64;
-		Resources.maxViewports = 16;
-		Resources.maxVertexAtomicCounters = 0;
-		Resources.maxTessControlAtomicCounters = 0;
-		Resources.maxTessEvaluationAtomicCounters = 0;
-		Resources.maxGeometryAtomicCounters = 0;
-		Resources.maxFragmentAtomicCounters = 8;
-		Resources.maxCombinedAtomicCounters = 8;
-		Resources.maxAtomicCounterBindings = 1;
-		Resources.maxVertexAtomicCounterBuffers = 0;
-		Resources.maxTessControlAtomicCounterBuffers = 0;
-		Resources.maxTessEvaluationAtomicCounterBuffers = 0;
-		Resources.maxGeometryAtomicCounterBuffers = 0;
-		Resources.maxFragmentAtomicCounterBuffers = 1;
-		Resources.maxCombinedAtomicCounterBuffers = 1;
-		Resources.maxAtomicCounterBufferSize = 16384;
-		Resources.maxTransformFeedbackBuffers = 4;
-		Resources.maxTransformFeedbackInterleavedComponents = 64;
-		Resources.maxCullDistances = 8;
-		Resources.maxCombinedClipAndCullDistances = 8;
-		Resources.maxSamples = 4;
-		Resources.maxMeshOutputVerticesNV = 256;
-		Resources.maxMeshOutputPrimitivesNV = 512;
-		Resources.maxMeshWorkGroupSizeX_NV = 32;
-		Resources.maxMeshWorkGroupSizeY_NV = 1;
-		Resources.maxMeshWorkGroupSizeZ_NV = 1;
-		Resources.maxTaskWorkGroupSizeX_NV = 32;
-		Resources.maxTaskWorkGroupSizeY_NV = 1;
-		Resources.maxTaskWorkGroupSizeZ_NV = 1;
-		Resources.maxMeshViewCountNV = 4;
-		Resources.limits.nonInductiveForLoops = 1;
-		Resources.limits.whileLoops = 1;
-		Resources.limits.doWhileLoops = 1;
-		Resources.limits.generalUniformIndexing = 1;
-		Resources.limits.generalAttributeMatrixVectorIndexing = 1;
-		Resources.limits.generalVaryingIndexing = 1;
-		Resources.limits.generalSamplerIndexing = 1;
-		Resources.limits.generalVariableIndexing = 1;
-		Resources.limits.generalConstantMatrixVectorIndexing = 1;
-	}
+	std::string code(buffer);
 
-	static EShLanguage FindLanguage(const vk::ShaderStageFlagBits shader_type) {
-		switch (shader_type) {
-		case vk::ShaderStageFlagBits::eVertex:
-			return EShLangVertex;
-		case vk::ShaderStageFlagBits::eTessellationControl:
-			return EShLangTessControl;
-		case vk::ShaderStageFlagBits::eTessellationEvaluation:
-			return EShLangTessEvaluation;
-		case vk::ShaderStageFlagBits::eGeometry:
-			return EShLangGeometry;
-		case vk::ShaderStageFlagBits::eFragment:
-			return EShLangFragment;
-		case vk::ShaderStageFlagBits::eCompute:
-			return EShLangCompute;
-		default:
-			return EShLangVertex;
+	while (code.find("#include ") != code.npos)
+	{
+		const auto pos = code.find("#include ");
+		const auto p1 = code.find('<', pos);
+		const auto p2 = code.find('>', pos);
+		if (p1 == code.npos || p2 == code.npos || p2 <= p1)
+		{
+			printf("Error while loading shader program: %s\n", code.c_str());
+			return std::string();
 		}
+		const std::string name = code.substr(p1 + 1, p2 - p1 - 1);
+		const std::string include = readShaderFile(name.c_str());
+		code.replace(pos, p2-pos+1, include.c_str());
 	}
 
-	static bool GLSLtoSPV(const vk::ShaderStageFlagBits shader_type, const char *pshader, std::vector<unsigned int> &spirv) {
-		EShLanguage stage = FindLanguage(shader_type);
-		glslang::TShader shader(stage);
-		glslang::TProgram program;
-		const char *shaderStrings[1];
-		TBuiltInResource Resources = {};
-		InitResources(Resources);
-
-		// Enable SPIR-V and Vulkan rules when parsing GLSL
-		EShMessages messages = (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules);
-
-		shaderStrings[0] = pshader;
-		shader.setStrings(shaderStrings, 1);
-
-		if (!shader.parse(&Resources, 100, false, messages)) {
-			puts(shader.getInfoLog());
-			puts(shader.getInfoDebugLog());
-			return false;  // something didn't work
-		}
-
-		program.addShader(&shader);
-
-		//
-		// Program-level processing...
-		//
-
-		if (!program.link(messages)) {
-			puts(shader.getInfoLog());
-			puts(shader.getInfoDebugLog());
-			fflush(stdout);
-			return false;
-		}
-
-		glslang::GlslangToSpv(*program.getIntermediate(stage), spirv);
-		return true;
-	}
-};
-
-void InitVulkan() {
-	// ...
-
-	// init glslang
-	SpirvHelper::Init();
+	return code;
 }
 
-void ShutdownVulkan() {
-	// ...
-
-	// shut down glslang
-	SpirvHelper::Finalize();
+int endsWith(const char* s, const char* part)
+{
+	return (strstr( s, part ) - s) == (strlen( s ) - strlen( part ));
 }
 
-bool LoadShader(vk::ShaderStageFlagBits stage, const char* shaderCode) {
+glslang_stage_t glslangShaderStageFromFileName(const char* fileName)
+{
+	if (endsWith(fileName, ".vert"))
+		return GLSLANG_STAGE_VERTEX;
 
-	std::vector<unsigned int> shaderCodeSpirV;
-	bool success = SpirvHelper::GLSLtoSPV(stage, shaderCode, shaderCodeSpirV);
+	if (endsWith(fileName, ".frag"))
+		return GLSLANG_STAGE_FRAGMENT;
 
-	// ...
+	if (endsWith(fileName, ".geom"))
+		return GLSLANG_STAGE_GEOMETRY;
+
+	if (endsWith(fileName, ".comp"))
+		return GLSLANG_STAGE_COMPUTE;
+
+	if (endsWith(fileName, ".tesc"))
+		return GLSLANG_STAGE_TESSCONTROL;
+
+	if (endsWith(fileName, ".tese"))
+		return GLSLANG_STAGE_TESSEVALUATION;
+
+	return GLSLANG_STAGE_VERTEX;
+}
+
+void printShaderSource(const char* text)
+{
+	int line = 1;
+
+	printf("\n(%3i) ", line);
+
+	while (text && *text++)
+	{
+		if (*text == '\n')
+		{
+			printf("\n(%3i) ", ++line);
+		}
+		else if (*text == '\r')
+		{
+		}
+		else
+		{
+			printf("%c", *text);
+		}
+	}
+
+	printf("\n");
+}
+
+static size_t compileShader(glslang_stage_t stage, const char* shaderSource, ShaderModule& shaderModule)
+{
+	const glslang_input_t input =
+	{
+		.language = GLSLANG_SOURCE_GLSL,
+		.stage = stage,
+		.client = GLSLANG_CLIENT_VULKAN,
+		.client_version = GLSLANG_TARGET_VULKAN_1_1,
+		.target_language = GLSLANG_TARGET_SPV,
+		.target_language_version = GLSLANG_TARGET_SPV_1_1,
+		.code = shaderSource,
+		.default_version = 100,
+		.default_profile = GLSLANG_NO_PROFILE,
+		.force_default_version_and_profile = false,
+		.forward_compatible = false,
+		.messages = GLSLANG_MSG_DEFAULT_BIT,
+		.resource = (const glslang_resource_t*)&glslang::DefaultTBuiltInResource,
+	};
+
+	glslang_shader_t* shader = glslang_shader_create(&input);
+
+	if (!glslang_shader_preprocess(shader, &input))
+	{
+		fprintf(stderr, "GLSL preprocessing failed\n");
+		fprintf(stderr, "\n%s", glslang_shader_get_info_log(shader));
+		fprintf(stderr, "\n%s", glslang_shader_get_info_debug_log(shader));
+		printShaderSource(input.code);
+		return 0;
+	}
+
+	if (!glslang_shader_parse(shader, &input))
+	{
+		fprintf(stderr, "GLSL parsing failed\n");
+		fprintf(stderr, "\n%s", glslang_shader_get_info_log(shader));
+		fprintf(stderr, "\n%s", glslang_shader_get_info_debug_log(shader));
+		printShaderSource(glslang_shader_get_preprocessed_code(shader));
+		return 0;
+	}
+
+	glslang_program_t* program = glslang_program_create();
+	glslang_program_add_shader(program, shader);
+
+	if (!glslang_program_link(program, GLSLANG_MSG_SPV_RULES_BIT | GLSLANG_MSG_VULKAN_RULES_BIT))
+	{
+		fprintf(stderr, "GLSL linking failed\n");
+		fprintf(stderr, "\n%s", glslang_program_get_info_log(program));
+		fprintf(stderr, "\n%s", glslang_program_get_info_debug_log(program));
+		return 0;
+	}
+
+	glslang_program_SPIRV_generate(program, stage);
+
+	shaderModule.SPIRV.resize(glslang_program_SPIRV_get_size(program));
+	glslang_program_SPIRV_get(program, shaderModule.SPIRV.data());
+
+	{
+		const char* spirv_messages =
+			glslang_program_SPIRV_get_messages(program);
+
+		if (spirv_messages)
+			fprintf(stderr, "%s", spirv_messages);
+	}
+
+	glslang_program_delete(program);
+	glslang_shader_delete(shader);
+
+	return shaderModule.SPIRV.size();
+}
+
+size_t compileShaderFile(const char* file, ShaderModule& shaderModule)
+{
+	if (auto shaderSource = readShaderFile(file); !shaderSource.empty())
+		return compileShader(glslangShaderStageFromFileName(file), shaderSource.c_str(), shaderModule);
+
+	return 0;
+}
+
+bool saveFileBinarySPIRV(const char* filename, unsigned int* code, size_t size)
+{
+	FILE* f = fopen(filename, "w");
+
+	if (!f)
+		return false;
+
+	fwrite(code, sizeof(uint32_t), size, f);
+	fclose(f);
+
+	return true;
+}
+
+void testShaderCompilation(const char* sourceFilename, const char* destFilename)
+{
+	ShaderModule shaderModule;
+
+	if (compileShaderFile(sourceFilename, shaderModule) < 1)
+		return;
+
+	saveFileBinarySPIRV(destFilename, shaderModule.SPIRV.data(), shaderModule.SPIRV.size());
 }

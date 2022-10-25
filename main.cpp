@@ -34,9 +34,7 @@
 #include <optional>
 #include <set>
 
-#include <glslang/Include/glslang_c_shader_types.h>
-#include <glslang/Include/glslang_c_interface.h>
-#include "glslang/SPIRV/GlslangToSpv.h"
+#include "BuilderSPIRV.h"
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
@@ -841,10 +839,10 @@ private:
         VkApplicationInfo appInfo{};
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         appInfo.pApplicationName = "Hello Triangle";
-        appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+        appInfo.applicationVersion = VK_MAKE_VERSION(1, 1, 0);
         appInfo.pEngineName = "No Engine";
-        appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-        appInfo.apiVersion = VK_API_VERSION_1_0;
+        appInfo.engineVersion = VK_MAKE_VERSION(1, 1, 0);
+        appInfo.apiVersion = VK_API_VERSION_1_1;
 
         VkInstanceCreateInfo createInstanceInfo{};
         createInstanceInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -1132,8 +1130,15 @@ private:
         auto vertShaderCode = readFile("shaders/shader.vert.spv");
         auto fragShaderCode = readFile("shaders/shader.frag.spv");
 
-        VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
-        VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
+        VkShaderModule vertShaderModule; //= createShaderModule(vertShaderCode);
+        VkShaderModule fragShaderModule; //= createShaderModule(fragShaderCode);
+
+        ShaderModule vertSPV, fragSPV;
+        compileShaderFile("../shaders/shader.vert", vertSPV);
+        compileShaderFile("../shaders/shader.frag", fragSPV);
+
+        vertShaderModule = createShaderModule(vertSPV.SPIRV);
+        fragShaderModule = createShaderModule(fragSPV.SPIRV);;
 
         VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
         vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -1638,10 +1643,10 @@ private:
         currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
-    VkShaderModule createShaderModule(const std::vector<char>& code) {
+    VkShaderModule createShaderModule(const std::vector<uint32_t>& code) {
         VkShaderModuleCreateInfo createInfo{};
         createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        createInfo.codeSize = code.size();
+        createInfo.codeSize = code.size() * sizeof(uint32_t);
         createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
 
         VkShaderModule shaderModule;
@@ -1847,12 +1852,19 @@ private:
 int main() {
     HelloVK app;
 
+    glslang_initialize_process();
+
+    testShaderCompilation("../shaders/shader.frag", "../shaders/shader.frag.spv");
+    testShaderCompilation("../shaders/shader.vert", "../shaders/shader.vert.spv");
+
     try {
         app.run();
     } catch (const std::exception& e) {
         std::cerr << e.what() << std::endl;
         return EXIT_FAILURE;
     }
+
+    glslang_finalize_process();
 
     return EXIT_SUCCESS;
 }

@@ -8,6 +8,8 @@ if (NOT CMAKE_BUILD_TYPE)
 endif()
 message("${CMAKE_BUILD_TYPE} build")
 
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -17,9 +19,9 @@ if(HAS_CLANGD)
   set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 endif()
 
-add_executable(vktest)
-file(GLOB sources CONFIGURE_DEPENDS *.h *.cpp)
-target_sources(vktest PUBLIC main.cpp)
+file(GLOB sources CONFIGURE_DEPENDS *.h *.c *.cpp)
+add_executable(vktest ${sources})
+# target_sources(vktest PUBLIC main.cpp)
 
 find_package(Vulkan REQUIRED)
 target_link_libraries(${PROJECT_NAME} ${Vulkan_LIBRARIES})
@@ -32,59 +34,50 @@ target_include_directories(${PROJECT_NAME} PUBLIC ${GLFW_INCLUDE_DIRS})
 find_path(STB_INCLUDE_DIRS "stb_c_lexer.h")
 target_include_directories(${PROJECT_NAME} PRIVATE ${STB_INCLUDE_DIRS})
 
-find_package(tinyobjloader CONFIG REQUIRED)
-target_link_libraries(${PROJECT_NAME} tinyobjloader::tinyobjloader)
+# find_package(tinyobjloader CONFIG REQUIRED)
+# target_link_libraries(${PROJECT_NAME} tinyobjloader::tinyobjloader)
 
-find_package(unofficial-spirv-reflect CONFIG REQUIRED)
-target_link_libraries(${PROJECT_NAME} unofficial::spirv-reflect::spirv-reflect)
+# include(FetchContent)
+# Set(FETCHCONTENT_QUIET OFF)
 
-include(FetchContent)
-Set(FETCHCONTENT_QUIET OFF)
-
-set(SPIRV_REFLECT_BUILD_TESTS OFF)
-FetchContent_Declare(
-  spirv-reflect
-  GIT_REPOSITORY https://github.com/KhronosGroup/SPIRV-Reflect.git
-  GIT_TAG        sdk-1.3.224.1
-  SOURCE_DIR     ${CMAKE_CURRENT_SOURCE_DIR}/external/spirv-reflect
-  GIT_SHALLOW TRUE
-  GIT_PROGRESS TRUE
-)
+# FetchContent_Declare(
+#   spirv-reflect
+#   GIT_REPOSITORY https://github.com/KhronosGroup/SPIRV-Reflect.git
+#   GIT_TAG        sdk-1.3.224.1
+#   SOURCE_DIR     ${CMAKE_CURRENT_SOURCE_DIR}/external/spirv-reflect
+#   GIT_SHALLOW TRUE
+#   GIT_PROGRESS TRUE
+# )
 # FetchContent_MakeAvailable(spirv-reflect)
-# FetchContent_Populate(spirv-reflect)
-# add_subdirectory(${spirv-reflect_SOURCE_DIR} ${spirv-reflect_BINARY_DIR})
-# target_link_libraries(${PROJECT_NAME} spirv-reflect)
 
-FetchContent_Declare(
-  glslang
-  GIT_REPOSITORY https://github.com/KhronosGroup/glslang.git
-  GIT_TAG        11.12.0
-  SOURCE_DIR     ${CMAKE_CURRENT_SOURCE_DIR}/external/glslang
-  GIT_SHALLOW TRUE
-  GIT_PROGRESS TRUE
-)
-FetchContent_MakeAvailable(glslang)
+# FetchContent_Declare(
+#   glslang
+#   GIT_REPOSITORY https://github.com/KhronosGroup/glslang.git
+#   GIT_TAG        11.12.0
+#   SOURCE_DIR     ${CMAKE_CURRENT_SOURCE_DIR}/external/glslang
+#   GIT_SHALLOW TRUE
+#   GIT_PROGRESS TRUE
+# )
+# FetchContent_MakeAvailable(glslang)
 
-# add_subdirectory(external/glslang)
+add_subdirectory(external/glslang)
 
-# include_directories(external/glslang)
-# include_directories(external/glslang/src)
-# include_directories(external/glslang/StandAlone)
-# include_directories(external/glslang/glslang/Include)
+include_directories(external/glslang/glslang/Include)
+include_directories(external/glslang)
+include_directories(external/glslang/StandAlone)
+include_directories(external/glslang/src)
 
-# set_property(TARGET glslang       PROPERTY FOLDER "ThirdPartyLibraries/glslang")
-# set_property(TARGET OGLCompiler   PROPERTY FOLDER "ThirdPartyLibraries/glslang")
-# set_property(TARGET OSDependent   PROPERTY FOLDER "ThirdPartyLibraries/glslang")
-# set_property(TARGET SPIRV         PROPERTY FOLDER "ThirdPartyLibraries/glslang")
-# set_property(TARGET SPVRemapper   PROPERTY FOLDER "ThirdPartyLibraries/glslang")
+set_property(TARGET glslang       PROPERTY FOLDER "external/glslang")
+set_property(TARGET OGLCompiler   PROPERTY FOLDER "external/glslang")
+set_property(TARGET OSDependent   PROPERTY FOLDER "external/glslang")
+set_property(TARGET SPIRV         PROPERTY FOLDER "external/glslang")
+set_property(TARGET SPVRemapper   PROPERTY FOLDER "external/glslang")
 
 target_link_libraries(${PROJECT_NAME} glslang SPIRV)
 
-# Google Shader compiler 
-# find_package(unofficial-shaderc CONFIG REQUIRED)
-# target_link_libraries(${PROJECT_NAME} unofficial::shaderc::shaderc)
-# find_package(unofficial-shaderc_util CONFIG REQUIRED)
-# target_link_libraries(${PROJECT_NAME} unofficial::shaderc_util::shaderc_util)
+# add_subdirectory(external/SPIRV-Reflect)
+# include_directories(external/SPIRV-Reflect)
+# set_property(TARGET SPIRV-Reflect PROPERTY FOLDER "external/SPIRV-Reflect")
 
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)
