@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <iostream>
 
+#include "spirv_reflect.c"
+
 std::string readShaderFile(const char* fileName)
 {
 	FILE* file = fopen(fileName, "r");
@@ -115,7 +117,7 @@ static size_t compileShader(glslang_stage_t stage, const char* shaderSource, Sha
 		.client = GLSLANG_CLIENT_VULKAN,
 		.client_version = GLSLANG_TARGET_VULKAN_1_1,
 		.target_language = GLSLANG_TARGET_SPV,
-		.target_language_version = GLSLANG_TARGET_SPV_1_1,
+		.target_language_version = GLSLANG_TARGET_SPV_1_3,
 		.code = shaderSource,
 		.default_version = 100,
 		.default_profile = GLSLANG_NO_PROFILE,
@@ -204,4 +206,29 @@ void testShaderCompilation(const char* sourceFilename, const char* destFilename)
 		return;
 
 	saveFileBinarySPIRV(destFilename, shaderModule.SPIRV.data(), shaderModule.SPIRV.size());
+}
+
+int SpirvReflectExample(const void* spirv_code, size_t spirv_nbytes)
+{
+    // Generate reflection data for a shader
+    SpvReflectShaderModule module;
+    SpvReflectResult result = spvReflectCreateShaderModule(spirv_nbytes, spirv_code, &module);
+    assert(result == SPV_REFLECT_RESULT_SUCCESS);
+
+    // Enumerate and extract shader's input variables
+    uint32_t var_count = 0;
+    result = spvReflectEnumerateInputVariables(&module, &var_count, NULL);
+    assert(result == SPV_REFLECT_RESULT_SUCCESS);
+    SpvReflectInterfaceVariable** input_vars =
+    (SpvReflectInterfaceVariable**)malloc(var_count * sizeof(SpvReflectInterfaceVariable*));
+    result = spvReflectEnumerateInputVariables(&module, &var_count, input_vars);
+    assert(result == SPV_REFLECT_RESULT_SUCCESS);
+
+    // Output variables, descriptor bindings, descriptor sets, and push constants
+    // can be enumerated and extracted using a similar mechanism.
+
+    // Destroy the reflection data when no longer required.
+    spvReflectDestroyShaderModule(&module);
+
+    return 0;
 }

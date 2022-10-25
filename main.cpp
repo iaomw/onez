@@ -1138,7 +1138,9 @@ private:
         compileShaderFile("../shaders/shader.frag", fragSPV);
 
         vertShaderModule = createShaderModule(vertSPV.SPIRV);
-        fragShaderModule = createShaderModule(fragSPV.SPIRV);;
+        fragShaderModule = createShaderModule(fragSPV.SPIRV);
+
+        SpirvReflectExample(vertSPV.SPIRV.data(), vertSPV.SPIRV.size() * sizeof(uint32_t));
 
         VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
         vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -1854,8 +1856,8 @@ int main() {
 
     glslang_initialize_process();
 
-    testShaderCompilation("../shaders/shader.frag", "../shaders/shader.frag.spv");
-    testShaderCompilation("../shaders/shader.vert", "../shaders/shader.vert.spv");
+    //testShaderCompilation("../shaders/shader.frag", "../shaders/shader.frag.spv");
+    //testShaderCompilation("../shaders/shader.vert", "../shaders/shader.vert.spv");
 
     try {
         app.run();

@@ -10,7 +10,7 @@
 #include <SPIRV/GlslangToSpv.h>
 #include <StandAlone/ResourceLimits.h>
 
-// #include "spirv_reflect.h"
+#include "spirv_reflect.h"
 
 struct ShaderModule final
 {
@@ -29,3 +29,9 @@ static size_t compileShader(glslang_stage_t stage, const char* shaderSource, Sha
 size_t compileShaderFile(const char* file, ShaderModule& shaderModule);
 
 void testShaderCompilation(const char* sourceFilename, const char* destFilename);
+
+
+
+
+
+int SpirvReflectExample(const void* spirv_code, size_t spirv_nbytes);
