@@ -1133,7 +1133,7 @@ private:
         VkShaderModule vertShaderModule; //= createShaderModule(vertShaderCode);
         VkShaderModule fragShaderModule; //= createShaderModule(fragShaderCode);
 
-        ShaderModule vertSPV, fragSPV;
+        FatShaderModule vertSPV, fragSPV;
         compileShaderFile("../shaders/shader.vert", vertSPV);
         compileShaderFile("../shaders/shader.frag", fragSPV);
 
@@ -1856,8 +1856,8 @@ int main() {
 
     glslang_initialize_process();
 
-    //testShaderCompilation("../shaders/shader.frag", "../shaders/shader.frag.spv");
-    //testShaderCompilation("../shaders/shader.vert", "../shaders/shader.vert.spv");
+    testShaderCompilation("../shaders/shader.frag", "../shaders/shader.frag.spv");
+    testShaderCompilation("../shaders/shader.vert", "../shaders/shader.vert.spv");
 
     try {
         app.run();

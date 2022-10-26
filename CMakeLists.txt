@@ -124,3 +124,17 @@ add_custom_command(TARGET vktest POST_BUILD
 )
 
 add_dependencies(vktest Shaders)
+
+if(HAS_CLANGD)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E create_symlink #copy_directory
+        "${CMAKE_BINARY_DIR}/compile_commands.json"
+        "${CMAKE_SOURCE_DIR}/compile_commands.json"
+    )
+endif()
+
+# Set global property (all targets are impacted)
+# set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CMAKE_COMMAND} -E time")
+
+# Set property for my_target only
+set_property(TARGET ${PROJECT_NAME} PROPERTY RULE_LAUNCH_COMPILE "${CMAKE_COMMAND} -E time")
