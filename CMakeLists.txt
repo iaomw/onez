@@ -76,7 +76,7 @@ set_property(TARGET SPVRemapper   PROPERTY FOLDER "external/glslang")
 target_link_libraries(${PROJECT_NAME} glslang SPIRV)
 
 # add_subdirectory(external/SPIRV-Reflect)
-include_directories(external/SPIRV-Reflect)
+# include_directories(external/SPIRV-Reflect)
 # set_property(TARGET SPIRV-Reflect PROPERTY FOLDER "external/SPIRV-Reflect")
 
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)

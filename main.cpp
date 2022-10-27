@@ -839,10 +839,10 @@ private:
         VkApplicationInfo appInfo{};
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         appInfo.pApplicationName = "Hello Triangle";
-        appInfo.applicationVersion = VK_MAKE_VERSION(1, 1, 0);
+        appInfo.applicationVersion = VK_MAKE_VERSION(1, 2, 0);
         appInfo.pEngineName = "No Engine";
-        appInfo.engineVersion = VK_MAKE_VERSION(1, 1, 0);
-        appInfo.apiVersion = VK_API_VERSION_1_1;
+        appInfo.engineVersion = VK_MAKE_VERSION(1, 2, 0);
+        appInfo.apiVersion = VK_API_VERSION_1_2;
 
         VkInstanceCreateInfo createInstanceInfo{};
         createInstanceInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -1127,31 +1127,36 @@ private:
     }
 
     void createGraphicsPipeline() {
-        auto vertShaderCode = readFile("shaders/shader.vert.spv");
-        auto fragShaderCode = readFile("shaders/shader.frag.spv");
 
-        VkShaderModule vertShaderModule; //= createShaderModule(vertShaderCode);
-        VkShaderModule fragShaderModule; //= createShaderModule(fragShaderCode);
+        _Shader vertShader, fragShader;
 
-        FatShaderModule vertSPV, fragSPV;
-        compileShaderFile("../shaders/shader.vert", vertSPV);
-        compileShaderFile("../shaders/shader.frag", fragSPV);
+        loadinShader(vertShader, device, "../shaders/shader.vert");
+        loadinShader(fragShader, device, "../shaders/shader.frag");
 
-        vertShaderModule = createShaderModule(vertSPV.SPIRV);
-        fragShaderModule = createShaderModule(fragSPV.SPIRV);
+        SpirvReflectExample(vertShader.SPIRV.data(), vertShader.SPIRV.size() * sizeof(uint32_t));
 
-        SpirvReflectExample(vertSPV.SPIRV.data(), vertSPV.SPIRV.size() * sizeof(uint32_t));
+        auto meshProgram = createProgram(device, VK_PIPELINE_BIND_POINT_GRAPHICS, { &vertShader, &fragShader }, 0, false);
+
+        VkPipelineCache pipelineCache = 0;
+
+            VkPipelineRenderingCreateInfo renderingInfo = { VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
+            renderingInfo.colorAttachmentCount = 1;
+            renderingInfo.pColorAttachmentFormats = &swapChainImageFormat; 
+            auto depthFormat = findDepthFormat();
+            renderingInfo.depthAttachmentFormat = depthFormat;
+
+        auto meshPipeline = createGraphicsPipelineVK13(device, pipelineCache, renderingInfo, { &vertShader, &fragShader }, meshProgram.layout);
 
         VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
         vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-        vertShaderStageInfo.module = vertShaderModule;
+        vertShaderStageInfo.module = vertShader.vkModule;
         vertShaderStageInfo.pName = "main";
 
         VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
         fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-        fragShaderStageInfo.module = fragShaderModule;
+        fragShaderStageInfo.module = fragShader.vkModule;
         fragShaderStageInfo.pName = "main";
 
         VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
@@ -1263,8 +1268,10 @@ private:
             throw std::runtime_error("failed to create graphics pipeline!");
         }
 
-        vkDestroyShaderModule(device, fragShaderModule, nullptr);
-        vkDestroyShaderModule(device, vertShaderModule, nullptr);
+        //graphicsPipeline = meshPipeline;
+
+        vkDestroyShaderModule(device, fragShader.vkModule, nullptr);
+        vkDestroyShaderModule(device, vertShader.vkModule, nullptr);
     }
 
     void createFramebuffers() {
@@ -1645,20 +1652,6 @@ private:
         currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
-    VkShaderModule createShaderModule(const std::vector<uint32_t>& code) {
-        VkShaderModuleCreateInfo createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        createInfo.codeSize = code.size() * sizeof(uint32_t);
-        createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
-
-        VkShaderModule shaderModule;
-        if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create shader module!");
-        }
-
-        return shaderModule;
-    }
-
     VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) {
         for (const auto& availableFormat : availableFormats) {
             if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
@@ -1826,24 +1819,6 @@ private:
         return true;
     }
 
-    static std::vector<char> readFile(const std::string& filename) {
-        std::ifstream file(filename, std::ios::ate | std::ios::binary);
-
-        if (!file.is_open()) {
-            throw std::runtime_error("Failed to open file: " + filename);
-        }
-
-        size_t fileSize = (size_t) file.tellg();
-        std::vector<char> buffer(fileSize);
-
-        file.seekg(0);
-        file.read(buffer.data(), fileSize);
-
-        file.close();
-
-        return buffer;
-    }
-
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) {
         std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
 
@@ -1856,8 +1831,8 @@ int main() {
 
     glslang_initialize_process();
 
-    testShaderCompilation("../shaders/shader.frag", "../shaders/shader.frag.spv");
-    testShaderCompilation("../shaders/shader.vert", "../shaders/shader.vert.spv");
+    testShaderCompilation("./shaders/shader.frag.spv", "../shaders/shader.frag.spv");
+    testShaderCompilation("./shaders/shader.vert.spv", "../shaders/shader.vert.spv");
 
     try {
         app.run();

@@ -11,7 +11,15 @@
 #include <vulkan/vulkan_core.h>
 
 #include "onez.h"
-#include "spirv_reflect.c"
+// #include "spirv_reflect.c"
+
+#ifdef __linux__
+#include <spirv/unified1/spirv.h>
+#elif VK_HEADER_VERSION >= 135
+#include <spirv-headers/spirv.h>
+#else
+#include <vulkan/spirv.h>
+#endif
 
 std::string readShaderFile(const char* fileName)
 {
@@ -113,14 +121,14 @@ void printShaderSource(const char* text)
 	printf("\n");
 }
 
-size_t compileShader(glslang_stage_t stage, const char* shaderSource, FatShaderModule& shaderModule)
+size_t compileShader(glslang_stage_t stage, const char* shaderSource, _Shader& _shader)
 {
 	const glslang_input_t input =
 	{
 		.language = GLSLANG_SOURCE_GLSL,
 		.stage = stage,
 		.client = GLSLANG_CLIENT_VULKAN,
-		.client_version = GLSLANG_TARGET_VULKAN_1_1,
+		.client_version = GLSLANG_TARGET_VULKAN_1_2,
 		.target_language = GLSLANG_TARGET_SPV,
 		.target_language_version = GLSLANG_TARGET_SPV_1_3,
 		.code = shaderSource,
@@ -165,8 +173,8 @@ size_t compileShader(glslang_stage_t stage, const char* shaderSource, FatShaderM
 
 	glslang_program_SPIRV_generate(program, stage);
 
-	shaderModule.SPIRV.resize(glslang_program_SPIRV_get_size(program));
-	glslang_program_SPIRV_get(program, shaderModule.SPIRV.data());
+	_shader.SPIRV.resize(glslang_program_SPIRV_get_size(program));
+	glslang_program_SPIRV_get(program, _shader.SPIRV.data());
 
 	{
 		const char* spirv_messages =
@@ -179,15 +187,29 @@ size_t compileShader(glslang_stage_t stage, const char* shaderSource, FatShaderM
 	glslang_program_delete(program);
 	glslang_shader_delete(shader);
 
-	return shaderModule.SPIRV.size();
+	return _shader.SPIRV.size();
 }
 
-size_t compileShaderFile(const char* file, FatShaderModule& shaderModule)
+size_t compileShaderFile(const char* file, _Shader& _shader)
 {
 	if (auto shaderSource = readShaderFile(file); !shaderSource.empty())
-		return compileShader(glslangShaderStageFromFileName(file), shaderSource.c_str(), shaderModule);
+		return compileShader(glslangShaderStageFromFileName(file), shaderSource.c_str(), _shader);
 
 	return 0;
+}
+
+VkShaderModule createVkShaderModule(const std::vector<uint32_t>& code, VkDevice device) {
+	VkShaderModuleCreateInfo createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	createInfo.codeSize = code.size() * sizeof(uint32_t);
+	createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+
+	VkShaderModule shaderModule;
+	if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create shader module!");
+	}
+
+	return shaderModule;
 }
 
 bool saveFileSPIRV(const char* filename, unsigned int* code, size_t size)
@@ -205,37 +227,48 @@ bool saveFileSPIRV(const char* filename, unsigned int* code, size_t size)
 
 void testShaderCompilation(const char* sourceFilename, const char* destFilename)
 {
-	FatShaderModule shaderModule;
 
-	if (compileShaderFile(sourceFilename, shaderModule) < 1)
+	if (endsWith(sourceFilename, "spv")) {
+		auto data = readFileSPIRV(sourceFilename);
+
+		_Shader ss;
+
+		parseShader(ss, (uint32_t*)data.data(), (uint32_t)data.size()/4);
+
+		return;
+	}
+
+	_Shader _shader;
+
+	if (compileShaderFile(sourceFilename, _shader) < 1)
 		return;
 
-	parseShader(shaderModule, shaderModule.SPIRV.data(), shaderModule.SPIRV.size());
+	parseShader(_shader, _shader.SPIRV.data(), _shader.SPIRV.size());
 
-	saveFileSPIRV(destFilename, shaderModule.SPIRV.data(), shaderModule.SPIRV.size());
+	saveFileSPIRV(destFilename, _shader.SPIRV.data(), _shader.SPIRV.size());
 }
 
 int SpirvReflectExample(const void* spirv_code, size_t spirv_nbytes)
 {
-    // Generate reflection data for a shader
-    SpvReflectShaderModule module;
-    SpvReflectResult result = spvReflectCreateShaderModule(spirv_nbytes, spirv_code, &module);
-    assert(result == SPV_REFLECT_RESULT_SUCCESS);
+    // // Generate reflection data for a shader
+    // SpvReflectShaderModule module;
+    // SpvReflectResult result = spvReflectCreateShaderModule(spirv_nbytes, spirv_code, &module);
+    // assert(result == SPV_REFLECT_RESULT_SUCCESS);
 
-    // Enumerate and extract shader's input variables
-    uint32_t var_count = 0;
-    result = spvReflectEnumerateInputVariables(&module, &var_count, NULL);
-    assert(result == SPV_REFLECT_RESULT_SUCCESS);
-    SpvReflectInterfaceVariable** input_vars =
-    (SpvReflectInterfaceVariable**)malloc(var_count * sizeof(SpvReflectInterfaceVariable*));
-    result = spvReflectEnumerateInputVariables(&module, &var_count, input_vars);
-    assert(result == SPV_REFLECT_RESULT_SUCCESS);
+    // // Enumerate and extract shader's input variables
+    // uint32_t var_count = 0;
+    // result = spvReflectEnumerateInputVariables(&module, &var_count, NULL);
+    // assert(result == SPV_REFLECT_RESULT_SUCCESS);
+    // SpvReflectInterfaceVariable** input_vars =
+    // (SpvReflectInterfaceVariable**)malloc(var_count * sizeof(SpvReflectInterfaceVariable*));
+    // result = spvReflectEnumerateInputVariables(&module, &var_count, input_vars);
+    // assert(result == SPV_REFLECT_RESULT_SUCCESS);
 
-    // Output variables, descriptor bindings, descriptor sets, and push constants
-    // can be enumerated and extracted using a similar mechanism.
+    // // Output variables, descriptor bindings, descriptor sets, and push constants
+    // // can be enumerated and extracted using a similar mechanism.
 
-    // Destroy the reflection data when no longer required.
-    spvReflectDestroyShaderModule(&module);
+    // // Destroy the reflection data when no longer required.
+    // spvReflectDestroyShaderModule(&module);
 
     return 0;
 }
@@ -261,10 +294,10 @@ static VkShaderStageFlagBits getShaderStage(SpvExecutionModel executionModel)
 		return VK_SHADER_STAGE_FRAGMENT_BIT;
 	case SpvExecutionModelGLCompute:
 		return VK_SHADER_STAGE_COMPUTE_BIT;
-	case SpvExecutionModelTaskNV:
-		return VK_SHADER_STAGE_TASK_BIT_NV;
-	case SpvExecutionModelMeshNV:
-		return VK_SHADER_STAGE_MESH_BIT_NV;
+	case SpvExecutionModelTaskEXT:
+		return VK_SHADER_STAGE_TASK_BIT_EXT;
+	case SpvExecutionModelMeshEXT:
+		return VK_SHADER_STAGE_MESH_BIT_EXT;
 
 	default:
 		assert(!"Unsupported execution model");
@@ -272,7 +305,25 @@ static VkShaderStageFlagBits getShaderStage(SpvExecutionModel executionModel)
 	}
 }
 
-void parseShader(FatShaderModule& shader, const uint32_t* code, uint32_t codeSize)
+static VkDescriptorType getDescriptorType(SpvOp op)
+{
+	switch (op)
+	{
+	case SpvOpTypeStruct:
+		return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	case SpvOpTypeImage:
+		return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	case SpvOpTypeSampler:
+		return VK_DESCRIPTOR_TYPE_SAMPLER;
+	case SpvOpTypeSampledImage:
+		return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	default:
+		assert(!"Unknown resource type");
+		return VkDescriptorType(0);
+	}
+}
+
+void parseShader(_Shader& shader, const uint32_t* code, uint32_t codeSize)
 {
 	assert(code[0] == SpvMagicNumber);
 
@@ -410,31 +461,13 @@ void parseShader(FatShaderModule& shader, const uint32_t* code, uint32_t codeSiz
 			assert(id.binding < 32);
 			assert(ids[id.typeId].opcode == SpvOpTypePointer);
 
-			assert((shader.resourceMask & (1 << id.binding)) == 0);
-
 			uint32_t typeKind = ids[ids[id.typeId].typeId].opcode;
+			VkDescriptorType resourceType = getDescriptorType(SpvOp(typeKind));
 
-			switch (typeKind)
-			{
-			case SpvOpTypeStruct:
-				shader.resourceTypes[id.binding] = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-				shader.resourceMask |= 1 << id.binding;
-				break;
-			case SpvOpTypeImage:
-				shader.resourceTypes[id.binding] = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-				shader.resourceMask |= 1 << id.binding;
-				break;
-			case SpvOpTypeSampler:
-				shader.resourceTypes[id.binding] = VK_DESCRIPTOR_TYPE_SAMPLER;
-				shader.resourceMask |= 1 << id.binding;
-				break;
-			case SpvOpTypeSampledImage:
-				shader.resourceTypes[id.binding] = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-				shader.resourceMask |= 1 << id.binding;
-				break;
-			default:
-				assert(!"Unknown resource type");
-			}
+			assert((shader.resourceMask & (1 << id.binding)) == 0 || shader.resourceTypes[id.binding] == resourceType);
+
+			shader.resourceTypes[id.binding] = resourceType;
+			shader.resourceMask |= 1 << id.binding;
 		}
 
 		if (id.opcode == SpvOpVariable && id.storageClass == SpvStorageClassPushConstant)
@@ -467,7 +500,18 @@ void parseShader(FatShaderModule& shader, const uint32_t* code, uint32_t codeSiz
 	}
 }
 
-static VkSpecializationInfo fillSpecializationInfo(std::vector<VkSpecializationMapEntry>& entries, const Constants& constants)
+bool loadinShader(_Shader& shader, VkDevice device, const char* path) {
+
+	auto size = compileShaderFile(path, shader);
+	if (size < 1 ) return false;
+
+	shader.vkModule = createVkShaderModule(shader.SPIRV, device);
+	parseShader(shader, shader.SPIRV.data(), shader.SPIRV.size());
+
+	return true;
+}
+
+static VkSpecializationInfo fillSpecializationInfo(std::vector<VkSpecializationMapEntry>& entries, const _Constants& constants)
 {
 	for (size_t i = 0; i < constants.size(); ++i)
 		entries.push_back({ uint32_t(i), uint32_t(i * 4), 4 });
@@ -481,7 +525,7 @@ static VkSpecializationInfo fillSpecializationInfo(std::vector<VkSpecializationM
 	return result;
 }
 
-VkPipeline createComputePipeline(VkDevice device, VkPipelineCache pipelineCache, const FatShaderModule &shader, VkPipelineLayout layout, Constants constants) 
+VkPipeline createComputePipeline(VkDevice device, VkPipelineCache pipelineCache, const _Shader &shader, VkPipelineLayout layout, _Constants constants) 
 {
 	assert(shader.stage == VK_SHADER_STAGE_COMPUTE_BIT);
 
@@ -494,7 +538,7 @@ VkPipeline createComputePipeline(VkDevice device, VkPipelineCache pipelineCache,
 
 	stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	stage.stage = shader.stage;
-	stage.module = shader.shaderModule;
+	stage.module = shader.vkModule;
 
 	stage.pName = "main";
 	stage.pSpecializationInfo = &specializationInfo;
@@ -508,7 +552,7 @@ VkPipeline createComputePipeline(VkDevice device, VkPipelineCache pipelineCache,
 	return pipeline;
 }
 
-VkPipeline createGraphicsPipeline(VkDevice device, VkPipelineCache pipelineCache, const VkPipelineRenderingCreateInfo&renderingInfo, Shaders shaders, VkPipelineLayout layout, Constants constants)
+VkPipeline createGraphicsPipelineVK13(VkDevice device, VkPipelineCache pipelineCache, const VkPipelineRenderingCreateInfo&renderingInfo, _Shaders shaders, VkPipelineLayout layout, _Constants constants)
 {
 	std::vector<VkSpecializationMapEntry> specializationEntries;
 	VkSpecializationInfo specializationInfo = fillSpecializationInfo(specializationEntries, constants);
@@ -523,7 +567,7 @@ VkPipeline createGraphicsPipeline(VkDevice device, VkPipelineCache pipelineCache
 	{
 		VkPipelineShaderStageCreateInfo stage = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
 		stage.stage = shader->stage;
-		stage.module = shader->shaderModule;
+		stage.module = shader->vkModule;
 		stage.pName = "main";
 		stage.pSpecializationInfo = &specializationInfo;
 
@@ -584,7 +628,7 @@ VkPipeline createGraphicsPipeline(VkDevice device, VkPipelineCache pipelineCache
 	return pipeline;
 }
 
-static uint32_t gatherResources(Shaders shaders, VkDescriptorType(&resourceTypes)[32])
+static uint32_t gatherResources(_Shaders shaders, VkDescriptorType(&resourceTypes)[32])
 {
 	uint32_t resourceMask = 0;
 
@@ -610,7 +654,7 @@ static uint32_t gatherResources(Shaders shaders, VkDescriptorType(&resourceTypes
 	return resourceMask;
 }
 
-VkDescriptorSetLayout createSetLayout(VkDevice device, Shaders shaders, bool pushDescriptorsSupported) 
+VkDescriptorSetLayout createSetLayout(VkDevice device, _Shaders shaders, bool pushDescriptorsSupported) 
 {
 	std::vector<VkDescriptorSetLayoutBinding> setBindings;
 
@@ -668,7 +712,7 @@ VkPipelineLayout createPipelineLayout(VkDevice device, VkDescriptorSetLayout set
 	return layout;
 }
 
-VkDescriptorUpdateTemplate createUpdateTemplate(VkDevice device, VkPipelineBindPoint bindPoint, VkPipelineLayout layout, VkDescriptorSetLayout setLayout, Shaders shaders, bool pushDescriptorsSupported)
+VkDescriptorUpdateTemplate createUpdateTemplate(VkDevice device, VkPipelineBindPoint bindPoint, VkPipelineLayout layout, VkDescriptorSetLayout setLayout, _Shaders shaders, bool pushDescriptorsSupported)
 {
 	std::vector<VkDescriptorUpdateTemplateEntry> entries;
 
@@ -706,7 +750,7 @@ VkDescriptorUpdateTemplate createUpdateTemplate(VkDevice device, VkPipelineBindP
 	return updateTemplate;
 }
 
-Program createProgram(VkDevice device, VkPipelineBindPoint bindPoint, Shaders shaders, size_t pushConstantSize, bool pushDescriptorsSupported)
+_Program createProgram(VkDevice device, VkPipelineBindPoint bindPoint, _Shaders shaders, size_t pushConstantSize, bool pushDescriptorsSupported)
 {
 	VkShaderStageFlags pushConstantStages = 0;
 	for (const auto* shader : shaders) {
@@ -715,7 +759,7 @@ Program createProgram(VkDevice device, VkPipelineBindPoint bindPoint, Shaders sh
 		}
 	}
 
-	Program program {};
+	_Program program {};
 
 	program.bindPoint = bindPoint;
 
@@ -732,7 +776,7 @@ Program createProgram(VkDevice device, VkPipelineBindPoint bindPoint, Shaders sh
 	return program;
 }
 
-void destroyProgram(VkDevice device, const Program& program)
+void destroyProgram(VkDevice device, const _Program& program)
 {
 	vkDestroyDescriptorUpdateTemplate(device, program.updateTemplate, 0);
 	vkDestroyPipelineLayout(device, program.layout, 0);
