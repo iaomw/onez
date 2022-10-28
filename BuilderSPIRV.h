@@ -1,14 +1,12 @@
 #pragma once 
 
 #include "onez.h"
+#include <volk.h>
 
 #include <cstddef>
 #include <cstdint>
-#include <iostream>
 #include <fstream>
-
-#include <vulkan/vulkan.h>
-#include <vulkan/vulkan_core.h>
+#include <iostream>
 
 // #include <glslang/Include/ResourceLimits.h>
 #include <glslang/Include/glslang_c_interface.h>
@@ -19,11 +17,17 @@
 
 // #include "spirv_reflect.h"
 
+#ifdef __linux__
+#include <spirv/unified1/spirv.h>
+#elif VK_HEADER_VERSION >= 135
+#include <spirv-headers/spirv.h>
+#else
+#include <vulkan/spirv.h>
+#endif
+
 struct _Shader final
 {
-	std::vector<uint32_t> SPIRV;
-
-	VkShaderModule vkModule = nullptr;
+	VkShaderModule vkModule;
     VkShaderStageFlagBits stage;
 
     VkDescriptorType resourceTypes[32];
@@ -34,6 +38,8 @@ struct _Shader final
 	uint32_t localSizeZ;
 
 	bool usesPushConstants;
+
+	std::vector<uint32_t> SPIRV;
 };
 
 struct _Program
@@ -104,7 +110,7 @@ void destroyProgram(VkDevice device, const _Program& program);
 
 #pragma mark - SPIRV compile
 
-std::string readShaderFile(const char* fileName);
+std::string readFileGLSL(const char* fileName);
 bool saveFileSPIRV(const char* filename, unsigned int* code, size_t size);
 
 static std::vector<char> readFileSPIRV(const std::string& filename) {
@@ -130,9 +136,29 @@ static std::vector<char> readFileSPIRV(const std::string& filename) {
 	return buffer;
 }
 
+static std::vector<char> loadFileSPIRV(const char* path) {
+
+	FILE* file = fopen(path, "rb");
+	if (!file)
+		throw std::runtime_error("Failed to open file: " + std::string(path));
+
+	fseek(file, 0, SEEK_END);
+	long length = ftell(file);
+	assert(length >= 0);
+	fseek(file, 0, SEEK_SET);
+
+	std::vector<char> buffer(length);
+
+	size_t rc = fread(buffer.data(), 1, length, file);
+	assert(rc == size_t(length));
+	fclose(file);
+
+	return buffer;
+}
+
 // glslang_stage_t glslangShaderStageFromFileName(const char* fileName);
 
-size_t compileShader(glslang_stage_t stage, const char* shaderSource, _Shader& _shader);
+size_t compileShaderData(glslang_stage_t stage, const char* shaderSource, _Shader& _shader);
 size_t compileShaderFile(const char* file, _Shader& _shader);
 
 VkShaderModule createVkShaderModule(const std::vector<uint32_t>& code, VkDevice device);

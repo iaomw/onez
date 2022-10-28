@@ -1,14 +1,28 @@
-#include <glm/ext/matrix_transform.hpp>
-#include <vulkan/vulkan_core.h>
+#include "onez.h"
+
+// #if defined(_WIN32)
+// #   define VK_USE_PLATFORM_WIN32_KHR
+// #elif defined(__linux__) || defined(__unix__)
+// #   define VK_USE_PLATFORM_XLIB_KHR
+// #elif defined(__APPLE__)
+// #   define VK_USE_PLATFORM_MACOS_MVK
+// #else
+// #   error "Platform not supported by this example."
+// #endif
+
+#define VOLK_IMPLEMENTATION
+#include <volk.h>
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
-#include <vulkan/vulkan.h>
-//#include <vulkan/vulkan_core.h>
+// #include <vulkan/vulkan.h>
+// #include <vulkan/vulkan_core.h>
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/ext/matrix_transform.hpp>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp>
@@ -62,19 +76,11 @@ const bool enableValidationLayers = true;
 #endif
 
 VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger) {
-    auto func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
-    if (func != nullptr) {
-        return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
-    } else {
-        return VK_ERROR_EXTENSION_NOT_PRESENT;
-    }
+    return vkCreateDebugUtilsMessengerEXT(instance, pCreateInfo, pAllocator, pDebugMessenger);
 }
 
 void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMessenger, const VkAllocationCallbacks* pAllocator) {
-    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
-    if (func != nullptr) {
-        func(instance, debugMessenger, pAllocator);
-    }
+    vkDestroyDebugUtilsMessengerEXT(instance, debugMessenger, pAllocator);
 }
 
 struct QueueFamilyIndices {
@@ -256,7 +262,13 @@ private:
     }
 
     void initVulkan() {
+
+        VK_CHECK(volkInitialize());
+
         createInstance();
+
+        volkLoadInstance(instance);
+
         setupDebugMessenger();
         createSurface();
         pickPhysicalDevice();
@@ -526,32 +538,32 @@ private:
         
         VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 
-        VkImageMemoryBarrier barrier{};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.image = image;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
-        barrier.subresourceRange.levelCount = 1;
+        VkImageMemoryBarrier imageBarrier{};
+        imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        imageBarrier.image = image;
+        imageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        imageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        imageBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageBarrier.subresourceRange.baseArrayLayer = 0;
+        imageBarrier.subresourceRange.layerCount = 1;
+        imageBarrier.subresourceRange.levelCount = 1;
 
         int32_t mipWidth = texWidth;
         int32_t mipHeight = texHeight;
 
         for (uint32_t i = 1; i < mipLevels; i++) {
-            barrier.subresourceRange.baseMipLevel = i - 1;
-            barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-            barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+            imageBarrier.subresourceRange.baseMipLevel = i - 1;
+            imageBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            imageBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+            imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            imageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
 
             vkCmdPipelineBarrier(commandBuffer,
             VK_PIPELINE_STAGE_TRANSFER_BIT, 
             VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
             0, nullptr,
             0, nullptr,
-            1, &barrier);
+            1, &imageBarrier);
 
             VkImageBlit blit{};
             blit.srcOffsets[0] = { 0, 0, 0 };
@@ -573,32 +585,32 @@ private:
             1, &blit,
             VK_FILTER_LINEAR);
 
-            barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-            barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            imageBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+            imageBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+            imageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
             vkCmdPipelineBarrier(commandBuffer,
                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
                 0, nullptr,
                 0, nullptr,
-                1, &barrier);
+                1, &imageBarrier);
 
             if (mipWidth > 1) mipWidth /= 2;
             if (mipHeight > 1) mipHeight /= 2;
         }
 
-        barrier.subresourceRange.baseMipLevel = mipLevels - 1;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        imageBarrier.subresourceRange.baseMipLevel = mipLevels - 1;
+        imageBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        imageBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        imageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
         vkCmdPipelineBarrier(commandBuffer,
             VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
             0, nullptr,
             0, nullptr,
-            1, &barrier);
+            1, &imageBarrier);
 
         endSingleTimeCommands(commandBuffer);
     }
@@ -638,47 +650,49 @@ private:
     void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout, uint32_t mipLevels) {
         VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 
-        VkImageMemoryBarrier barrier{};
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.oldLayout = oldLayout;
-        barrier.newLayout = newLayout;
+        VkImageMemoryBarrier imageBarrier{};
+        imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        imageBarrier.oldLayout = oldLayout;
+        imageBarrier.newLayout = newLayout;
 
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        imageBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        imageBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 
         if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
-            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+            imageBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
             if (hasStencilComponent(format)) {
-                barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+                imageBarrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
             }
         } else {
-            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            imageBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         }
 
-        barrier.image = image;
-        barrier.subresourceRange.baseMipLevel = 0;
-        barrier.subresourceRange.levelCount = mipLevels;
-        barrier.subresourceRange.baseArrayLayer = 0;
-        barrier.subresourceRange.layerCount = 1;
+        imageBarrier.image = image;
+        imageBarrier.subresourceRange.baseMipLevel = 0;
+        imageBarrier.subresourceRange.levelCount = mipLevels;
+        imageBarrier.subresourceRange.baseArrayLayer = 0;
+        imageBarrier.subresourceRange.layerCount = 1;
+
+        VK_REMAINING_MIP_LEVELS;
 
         VkPipelineStageFlags sourceStage;
         VkPipelineStageFlags destinationStage;
 
         if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-            barrier.srcAccessMask = 0;
-            barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            imageBarrier.srcAccessMask = 0;
+            imageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 
             sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
             destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
         } else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-            barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            imageBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
             sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
             destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
         } else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
-            barrier.srcAccessMask = 0;
-            barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            imageBarrier.srcAccessMask = 0;
+            imageBarrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
             sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
             destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
@@ -692,7 +706,7 @@ private:
             0,
             0, nullptr,
             0, nullptr,
-            1, &barrier
+            1, &imageBarrier
         );
 
         endSingleTimeCommands(commandBuffer);
@@ -1128,16 +1142,16 @@ private:
 
     void createGraphicsPipeline() {
 
-        _Shader vertShader, fragShader;
+        _Shader vertShader {}, fragShader {};
 
         loadinShader(vertShader, device, "../shaders/shader.vert");
         loadinShader(fragShader, device, "../shaders/shader.frag");
 
         SpirvReflectExample(vertShader.SPIRV.data(), vertShader.SPIRV.size() * sizeof(uint32_t));
 
-        auto meshProgram = createProgram(device, VK_PIPELINE_BIND_POINT_GRAPHICS, { &vertShader, &fragShader }, 0, false);
+            auto meshProgram = createProgram(device, VK_PIPELINE_BIND_POINT_GRAPHICS, { &vertShader, &fragShader }, 0, false);
 
-        VkPipelineCache pipelineCache = 0;
+            VkPipelineCache pipelineCache = 0;
 
             VkPipelineRenderingCreateInfo renderingInfo = { VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
             renderingInfo.colorAttachmentCount = 1;
@@ -1145,7 +1159,7 @@ private:
             auto depthFormat = findDepthFormat();
             renderingInfo.depthAttachmentFormat = depthFormat;
 
-        auto meshPipeline = createGraphicsPipelineVK13(device, pipelineCache, renderingInfo, { &vertShader, &fragShader }, meshProgram.layout);
+            //auto meshPipeline = createGraphicsPipelineVK13(device, pipelineCache, renderingInfo, { &vertShader, &fragShader }, meshProgram.layout);
 
         VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
         vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -1241,6 +1255,7 @@ private:
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutInfo.setLayoutCount = 1;
         pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+            //pipelineLayoutInfo.pSetLayouts = &meshProgram.setLayout;
 
         if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
             throw std::runtime_error("failed to create pipeline layout!");
@@ -1827,6 +1842,7 @@ private:
 };
 
 int main() {
+
     HelloVK app;
 
     glslang_initialize_process();

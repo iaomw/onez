@@ -31,8 +31,8 @@ find_package(glfw3 REQUIRED)
 target_link_libraries(${PROJECT_NAME} glfw)
 target_include_directories(${PROJECT_NAME} PUBLIC ${GLFW_INCLUDE_DIRS})
 
-find_path(STB_INCLUDE_DIRS "stb_c_lexer.h")
-target_include_directories(${PROJECT_NAME} PRIVATE ${STB_INCLUDE_DIRS})
+# find_path(STB_INCLUDE_DIRS "stb_c_lexer.h")
+# target_include_directories(${PROJECT_NAME} PRIVATE ${STB_INCLUDE_DIRS})
 
 # find_package(tinyobjloader CONFIG REQUIRED)
 # target_link_libraries(${PROJECT_NAME} tinyobjloader::tinyobjloader)
@@ -78,6 +78,13 @@ target_link_libraries(${PROJECT_NAME} glslang SPIRV)
 # add_subdirectory(external/SPIRV-Reflect)
 # include_directories(external/SPIRV-Reflect)
 # set_property(TARGET SPIRV-Reflect PROPERTY FOLDER "external/SPIRV-Reflect")
+
+set(VK_NO_PROTOTYPES ON)
+
+# add_subdirectory(external/volk)
+include_directories(external/volk)
+# set_property(TARGET volk  PROPERTY FOLDER "external")
+# target_link_libraries(${PROJECT_NAME} volk_headers)
 
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)

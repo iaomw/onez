@@ -5,3 +5,7 @@
 [submodule "external/SPIRV-Reflect"]
 	path = external/SPIRV-Reflect
 	url = https://github.com/KhronosGroup/SPIRV-Reflect.git
+
+[submodule "external/volk"]
+	path = external/volk
+	url = https://github.com/zeux/volk.git

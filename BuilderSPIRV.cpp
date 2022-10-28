@@ -1,27 +1,17 @@
 #include "BuilderSPIRV.h"
-#include "glslang_c_shader_types.h"
 
 #include <StandAlone/ResourceLimits.cpp>
 
-#include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <iostream>
-#include <vector>
-#include <vulkan/vulkan_core.h>
 
-#include "onez.h"
+#include <vector>
+#include <algorithm>
+
 // #include "spirv_reflect.c"
 
-#ifdef __linux__
-#include <spirv/unified1/spirv.h>
-#elif VK_HEADER_VERSION >= 135
-#include <spirv-headers/spirv.h>
-#else
-#include <vulkan/spirv.h>
-#endif
-
-std::string readShaderFile(const char* fileName)
+std::string readFileGLSL(const char* fileName)
 {
 	FILE* file = fopen(fileName, "r");
 
@@ -62,7 +52,7 @@ std::string readShaderFile(const char* fileName)
 			return std::string();
 		}
 		const std::string name = code.substr(p1 + 1, p2 - p1 - 1);
-		const std::string include = readShaderFile(name.c_str());
+		const std::string include = readFileGLSL(name.c_str());
 		code.replace(pos, p2-pos+1, include.c_str());
 	}
 
@@ -121,7 +111,7 @@ void printShaderSource(const char* text)
 	printf("\n");
 }
 
-size_t compileShader(glslang_stage_t stage, const char* shaderSource, _Shader& _shader)
+size_t compileShaderData(glslang_stage_t stage, const char* shaderSource, _Shader& _shader)
 {
 	const glslang_input_t input =
 	{
@@ -192,8 +182,8 @@ size_t compileShader(glslang_stage_t stage, const char* shaderSource, _Shader& _
 
 size_t compileShaderFile(const char* file, _Shader& _shader)
 {
-	if (auto shaderSource = readShaderFile(file); !shaderSource.empty())
-		return compileShader(glslangShaderStageFromFileName(file), shaderSource.c_str(), _shader);
+	if (auto shaderSource = readFileGLSL(file); !shaderSource.empty())
+		return compileShaderData(glslangShaderStageFromFileName(file), shaderSource.c_str(), _shader);
 
 	return 0;
 }
@@ -230,10 +220,13 @@ void testShaderCompilation(const char* sourceFilename, const char* destFilename)
 
 	if (endsWith(sourceFilename, "spv")) {
 		auto data = readFileSPIRV(sourceFilename);
+		auto _data = loadFileSPIRV(sourceFilename);
 
-		_Shader ss;
+		_Shader ss {};
 
-		parseShader(ss, (uint32_t*)data.data(), (uint32_t)data.size()/4);
+		_data;
+
+		parseShader(ss, reinterpret_cast<const uint32_t*>(data.data()), (uint32_t)data.size()/4);
 
 		return;
 	}

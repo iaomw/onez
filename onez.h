@@ -1,4 +1,10 @@
-#pragma once 
+// #pragma once 
+
+#ifndef ONEZH
+#define ONEZH
+
+// #include <vulkan/vulkan.h>
+// #include <vulkan/vulkan_core.h>
 
 #include <iostream>
 
@@ -6,9 +12,14 @@
 	do                                                                 \
 	{                                                                  \
 		VkResult err = x;                                              \
-		if (err)                                                       \
+		if (err != VK_SUCCESS)                                         \
 		{                                                              \
 			std::cout <<"Detected Vulkan error: " << err << std::endl; \
 			abort();                                                   \
 		}                                                              \
 	} while (0)
+
+
+#define ARRAYSIZE(array) ( sizeof(array)/sizeof(array[0]) )
+
+#endif
