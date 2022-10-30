@@ -20,8 +20,8 @@ if(HAS_CLANGD)
 endif()
 
 file(GLOB sources CONFIGURE_DEPENDS *.h *.c *.cpp)
-add_executable(vktest ${sources})
 # target_sources(vktest PUBLIC main.cpp)
+add_executable(vktest ${sources})
 
 find_package(Vulkan REQUIRED)
 target_link_libraries(${PROJECT_NAME} ${Vulkan_LIBRARIES})
@@ -30,6 +30,12 @@ target_include_directories(${PROJECT_NAME} PUBLIC ${Vulkan_INCLUDE_DIR})
 find_package(glfw3 REQUIRED)
 target_link_libraries(${PROJECT_NAME} glfw)
 target_include_directories(${PROJECT_NAME} PUBLIC ${GLFW_INCLUDE_DIRS})
+
+find_package(Threads REQUIRED)
+target_link_libraries(${PROJECT_NAME} Threads::Threads)
+
+find_package(glslang REQUIRED)
+target_link_libraries(${PROJECT_NAME} glslang glslang::SPIRV)
 
 # find_path(STB_INCLUDE_DIRS "stb_c_lexer.h")
 # target_include_directories(${PROJECT_NAME} PRIVATE ${STB_INCLUDE_DIRS})
@@ -60,37 +66,16 @@ target_include_directories(${PROJECT_NAME} PUBLIC ${GLFW_INCLUDE_DIRS})
 # )
 # FetchContent_MakeAvailable(glslang)
 
-add_subdirectory(external/glslang)
-
-include_directories(external/glslang/glslang/Include)
-include_directories(external/glslang)
-include_directories(external/glslang/StandAlone)
-include_directories(external/glslang/src)
-
-set_property(TARGET glslang       PROPERTY FOLDER "external/glslang")
-set_property(TARGET OGLCompiler   PROPERTY FOLDER "external/glslang")
-set_property(TARGET OSDependent   PROPERTY FOLDER "external/glslang")
-set_property(TARGET SPIRV         PROPERTY FOLDER "external/glslang")
-set_property(TARGET SPVRemapper   PROPERTY FOLDER "external/glslang")
-
-target_link_libraries(${PROJECT_NAME} glslang SPIRV)
+include_directories(external)
 
 # add_subdirectory(external/SPIRV-Reflect)
 # include_directories(external/SPIRV-Reflect)
 # set_property(TARGET SPIRV-Reflect PROPERTY FOLDER "external/SPIRV-Reflect")
 
-set(VK_NO_PROTOTYPES ON)
-
 # add_subdirectory(external/volk)
 include_directories(external/volk)
-# set_property(TARGET volk  PROPERTY FOLDER "external")
 # target_link_libraries(${PROJECT_NAME} volk_headers)
 
-set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
-set(THREADS_PREFER_PTHREAD_FLAG TRUE)
-find_package(Threads REQUIRED)
-                                      
-include_directories(external)
 #include_directories(external/glm)
 #include_directories(external/gli)
 #include_directories(external/imgui)

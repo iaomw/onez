@@ -1,6 +1,6 @@
 #include "BuilderSPIRV.h"
 
-#include <StandAlone/ResourceLimits.cpp>
+#include <glslang/StandAlone/ResourceLimits.cpp>
 
 #include <cassert>
 #include <cstdint>

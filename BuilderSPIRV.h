@@ -12,8 +12,8 @@
 #include <glslang/Include/glslang_c_interface.h>
 #include <glslang/Include/glslang_c_shader_types.h>
 
-#include <SPIRV/GlslangToSpv.h>
-#include <StandAlone/ResourceLimits.h>
+#include <glslang/SPIRV/GlslangToSpv.h>
+#include <glslang/StandAlone/ResourceLimits.h>
 
 // #include "spirv_reflect.h"
 
