@@ -66,8 +66,10 @@ const std::vector<const char*> deviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
     VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
 #ifdef __APPLE__ //https://github.com/KhronosGroup/MoltenVK/issues/1626
-    "VK_KHR_portability_subset"
+    "VK_KHR_portability_subset",
 #endif
+    VK_KHR_8BIT_STORAGE_EXTENSION_NAME,
+    VK_KHR_16BIT_STORAGE_EXTENSION_NAME,
 };
 
 #ifdef NDEBUG
@@ -971,7 +973,7 @@ private:
         deviceCreateInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
         deviceCreateInfo.pQueueCreateInfos = queueCreateInfos.data();
 
-        deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
+        //deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
 
         deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
         deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
@@ -982,6 +984,22 @@ private:
         } else {
             deviceCreateInfo.enabledLayerCount = 0;
         }
+
+        VkPhysicalDeviceFeatures2 features = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+        features.features.multiDrawIndirect = true;
+        features.features.pipelineStatisticsQuery = true;
+        features.features.shaderInt16 = true;
+        features.features.shaderInt64 = true;
+
+        features.features.samplerAnisotropy = VK_TRUE;
+        features.features.sampleRateShading = VK_TRUE;
+
+        VkPhysicalDeviceVulkan11Features features11 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
+        features11.storageBuffer16BitAccess = true;
+        features11.shaderDrawParameters = true;
+
+        deviceCreateInfo.pNext = &features;
+        features.pNext = &features11;
 
         if (vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device) != VK_SUCCESS) {
             throw std::runtime_error("failed to create logical device!");
