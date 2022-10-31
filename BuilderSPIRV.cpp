@@ -220,11 +220,8 @@ void testShaderCompilation(const char* sourceFilename, const char* destFilename)
 
 	if (endsWith(sourceFilename, "spv")) {
 		auto data = readFileSPIRV(sourceFilename);
-		auto _data = loadFileSPIRV(sourceFilename);
 
 		_Shader ss {};
-
-		_data;
 
 		parseShader(ss, reinterpret_cast<const uint32_t*>(data.data()), (uint32_t)data.size()/4);
 
@@ -269,12 +266,12 @@ int SpirvReflectExample(const void* spirv_code, size_t spirv_nbytes)
 // https://www.khronos.org/registry/spir-v/specs/1.0/SPIRV.pdf
 struct Id
 {
-	uint32_t opcode;
-	uint32_t typeId;
-	uint32_t storageClass;
-	uint32_t binding;
-	uint32_t set;
-	uint32_t constant;
+	uint32_t opcode {};
+	uint32_t typeId {};
+	uint32_t storageClass {};
+	uint32_t binding {};
+	uint32_t set {};
+	uint32_t constant {};
 };
 
 static VkShaderStageFlagBits getShaderStage(SpvExecutionModel executionModel)
@@ -545,82 +542,6 @@ VkPipeline createComputePipeline(VkDevice device, VkPipelineCache pipelineCache,
 	return pipeline;
 }
 
-VkPipeline createGraphicsPipelineVK13(VkDevice device, VkPipelineCache pipelineCache, const VkPipelineRenderingCreateInfo&renderingInfo, _Shaders shaders, VkPipelineLayout layout, _Constants constants)
-{
-	std::vector<VkSpecializationMapEntry> specializationEntries;
-	VkSpecializationInfo specializationInfo = fillSpecializationInfo(specializationEntries, constants);
-
-	VkGraphicsPipelineCreateInfo createInfo = { VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO };
-
-	VkPipeline pipeline = 0;
-
-	std::vector<VkPipelineShaderStageCreateInfo> stages;
-
-	for (const auto shader : shaders)
-	{
-		VkPipelineShaderStageCreateInfo stage = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
-		stage.stage = shader->stage;
-		stage.module = shader->vkModule;
-		stage.pName = "main";
-		stage.pSpecializationInfo = &specializationInfo;
-
-		stages.push_back(stage);
-	}
-
-	createInfo.stageCount = uint32_t(stages.size());
-	createInfo.pStages = stages.data();
-
-		VkPipelineVertexInputStateCreateInfo vertexInput = { VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
-	createInfo.pVertexInputState = &vertexInput;
-
-		VkPipelineInputAssemblyStateCreateInfo inputAssembly = { VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
-		inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-	createInfo.pInputAssemblyState = &inputAssembly;
-
-		VkPipelineViewportStateCreateInfo viewportState = { VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO };
-		viewportState.viewportCount = 1;
-		viewportState.scissorCount = 1;
-	createInfo.pViewportState = &viewportState;
-
-		VkPipelineRasterizationStateCreateInfo rasterizationState = { VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
-		rasterizationState.lineWidth = 1.f;
-		rasterizationState.frontFace = VK_FRONT_FACE_CLOCKWISE;
-		rasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
-	createInfo.pRasterizationState = &rasterizationState;
-
-		VkPipelineMultisampleStateCreateInfo multisampleState = { VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
-		multisampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-	createInfo.pMultisampleState = &multisampleState;
-
-		VkPipelineDepthStencilStateCreateInfo depthStencilState = { VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
-		depthStencilState.depthTestEnable = true;
-		depthStencilState.depthWriteEnable = true;
-		depthStencilState.depthCompareOp = VK_COMPARE_OP_GREATER;
-	createInfo.pDepthStencilState = &depthStencilState;
-
-	VkPipelineColorBlendAttachmentState colorAttachmentState = {};
-	colorAttachmentState.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-
-		VkPipelineColorBlendStateCreateInfo colorBlendState = { VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
-		colorBlendState.attachmentCount = 1;
-		colorBlendState.pAttachments = &colorAttachmentState;
-	createInfo.pColorBlendState = &colorBlendState;
-
-	VkDynamicState dynamicStates[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
-
-	VkPipelineDynamicStateCreateInfo dynamicState = { VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
-	dynamicState.dynamicStateCount = sizeof(dynamicStates) / sizeof(dynamicStates[0]);
-	dynamicState.pDynamicStates = dynamicStates;
-	createInfo.pDynamicState = &dynamicState;
-
-	createInfo.layout = layout;
-	createInfo.pNext = &renderingInfo;
-
-	VK_CHECK(vkCreateGraphicsPipelines(device, pipelineCache, 1, &createInfo, 0, &pipeline));
-
-	return pipeline;
-}
-
 static uint32_t gatherResources(_Shaders shaders, VkDescriptorType(&resourceTypes)[32])
 {
 	uint32_t resourceMask = 0;
@@ -703,75 +624,4 @@ VkPipelineLayout createPipelineLayout(VkDevice device, VkDescriptorSetLayout set
 	VK_CHECK(vkCreatePipelineLayout(device, &createInfo, 0, &layout));
 
 	return layout;
-}
-
-VkDescriptorUpdateTemplate createUpdateTemplate(VkDevice device, VkPipelineBindPoint bindPoint, VkPipelineLayout layout, VkDescriptorSetLayout setLayout, _Shaders shaders, bool pushDescriptorsSupported)
-{
-	std::vector<VkDescriptorUpdateTemplateEntry> entries;
-
-	VkDescriptorType resourceTypes[32] = {};
-	uint32_t resourceMask = gatherResources(shaders, resourceTypes);
-
-	for (uint32_t i=0; i<32; ++i) {
-		if (resourceMask & (1 << i)) {
-			VkDescriptorUpdateTemplateEntry entry {};
-			entry.dstBinding = i;
-			entry.dstArrayElement = 0;
-			entry.descriptorCount = 1;
-			entry.descriptorType = resourceTypes[i];
-			entry.offset = sizeof(DescriptorInfo) * i;
-			entry.stride = sizeof(DescriptorInfo);
-
-			entries.push_back(entry);
-		}
-	} //for
-
-	VkDescriptorUpdateTemplateCreateInfo createInfo { VK_STRUCTURE_TYPE_DESCRIPTOR_UPDATE_TEMPLATE_CREATE_INFO };
-
-	createInfo.descriptorUpdateEntryCount = uint32_t(entries.size());
-	createInfo.pDescriptorUpdateEntries = entries.data();
-
-	createInfo.templateType = pushDescriptorsSupported ? VK_DESCRIPTOR_UPDATE_TEMPLATE_TYPE_PUSH_DESCRIPTORS_KHR : VK_DESCRIPTOR_UPDATE_TEMPLATE_TYPE_DESCRIPTOR_SET;
-
-	createInfo.descriptorSetLayout = pushDescriptorsSupported ? 0 : setLayout;
-	createInfo.pipelineBindPoint = bindPoint;
-	createInfo.pipelineLayout = layout;
-
-	VkDescriptorUpdateTemplate updateTemplate = 0;
-	VK_CHECK(vkCreateDescriptorUpdateTemplate(device, &createInfo, 0, &updateTemplate));
-
-	return updateTemplate;
-}
-
-_Program createProgram(VkDevice device, VkPipelineBindPoint bindPoint, _Shaders shaders, size_t pushConstantSize, bool pushDescriptorsSupported)
-{
-	VkShaderStageFlags pushConstantStages = 0;
-	for (const auto* shader : shaders) {
-		if (shader->usesPushConstants) {
-			pushConstantStages |= shader->stage;
-		}
-	}
-
-	_Program program {};
-
-	program.bindPoint = bindPoint;
-
-	program.setLayout = createSetLayout(device, shaders, pushDescriptorsSupported);
-	assert(program.setLayout);
-	program.layout = createPipelineLayout(device, program.setLayout, pushConstantStages, pushConstantSize);
-	assert(program.layout);
-
-	program.updateTemplate = createUpdateTemplate(device, bindPoint, program.layout, program.setLayout, shaders, pushDescriptorsSupported);
-	assert(program.updateTemplate);
-
-	program.pushConstantStages = pushConstantStages;
-
-	return program;
-}
-
-void destroyProgram(VkDevice device, const _Program& program)
-{
-	vkDestroyDescriptorUpdateTemplate(device, program.updateTemplate, 0);
-	vkDestroyPipelineLayout(device, program.layout, 0);
-	vkDestroyDescriptorSetLayout(device, program.setLayout, 0);
 }

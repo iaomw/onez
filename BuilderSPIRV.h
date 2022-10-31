@@ -27,19 +27,19 @@
 
 struct _Shader final
 {
-	VkShaderModule vkModule;
-    VkShaderStageFlagBits stage;
+	VkShaderModule vkModule {};
+    VkShaderStageFlagBits stage {};
 
-    VkDescriptorType resourceTypes[32];
-	uint32_t resourceMask;
+    VkDescriptorType resourceTypes[32] {};
+	uint32_t resourceMask {};
 
-	uint32_t localSizeX;
-	uint32_t localSizeY;
-	uint32_t localSizeZ;
+	uint32_t localSizeX {};
+	uint32_t localSizeY {};
+	uint32_t localSizeZ {};
 
-	bool usesPushConstants;
+	bool usesPushConstants = false;
 
-	std::vector<uint32_t> SPIRV;
+	std::vector<uint32_t> SPIRV {};
 };
 
 struct _Program
@@ -105,9 +105,6 @@ using _Constants = std::initializer_list<int>;
 VkPipeline createGraphicsPipelineVK13(VkDevice device, VkPipelineCache pipelineCache, const VkPipelineRenderingCreateInfo& renderingInfo, _Shaders shaders, VkPipelineLayout layout, _Constants constants = {});
 VkPipeline createComputePipeline(VkDevice device, VkPipelineCache pipelineCache, const _Shader& shader, VkPipelineLayout layout, _Constants constants = {});
 
-_Program createProgram(VkDevice device, VkPipelineBindPoint bindPoint, _Shaders shaders, size_t pushConstantSize, bool pushDescriptorsSupported);
-void destroyProgram(VkDevice device, const _Program& program);
-
 #pragma mark - SPIRV compile
 
 std::string readFileGLSL(const char* fileName);
@@ -132,26 +129,6 @@ static std::vector<char> readFileSPIRV(const std::string& filename) {
 	file.read(buffer.data(), fileSize);
 
 	file.close();
-
-	return buffer;
-}
-
-static std::vector<char> loadFileSPIRV(const char* path) {
-
-	FILE* file = fopen(path, "rb");
-	if (!file)
-		throw std::runtime_error("Failed to open file: " + std::string(path));
-
-	fseek(file, 0, SEEK_END);
-	long length = ftell(file);
-	assert(length >= 0);
-	fseek(file, 0, SEEK_SET);
-
-	std::vector<char> buffer(length);
-
-	size_t rc = fread(buffer.data(), 1, length, file);
-	assert(rc == size_t(length));
-	fclose(file);
 
 	return buffer;
 }
