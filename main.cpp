@@ -75,10 +75,6 @@ const std::vector<const char*> deviceExtensions = {
     VK_KHR_16BIT_STORAGE_EXTENSION_NAME,
 };
 
-const std::vector<const char*> optionalDeviceExtensions = {
-    VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
-};
-
 #ifdef NDEBUG
 const bool enableValidationLayers = false;
 #else
@@ -184,22 +180,23 @@ private:
     VkDevice device;
 
     bool PUSH_DESCRIPTOR_SUPPORTED = false;
-    bool MESH_SHADER_SUPPORTED = false;
+    bool MESH_SHADERING_SUPPORTED = false;
 
-    std::unordered_set<const char*> requiredDeviceExtensions(deviceExtensions.begin(), deviceExtensions.end());
+    std::unordered_set<const char*> preparedDeviceExtensions { deviceExtensions.begin(), deviceExtensions.end() };
+    //= std::unordered_set<std::string>(deviceExtensions.begin(), deviceExtensions.end());
 
-    const std::map<std::string, std::function<void()>> optionalDeviceExtensionCallbacks 
+    const std::map<const char*, std::function<void()>> optionalDeviceExtensionActions 
     {
         { 
             VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME, [&]() {
                 PUSH_DESCRIPTOR_SUPPORTED = true;
-                requiredDeviceExtensions.insert(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
+                preparedDeviceExtensions.insert(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
             } 
         },
         { 
             VK_NV_MESH_SHADER_EXTENSION_NAME, [&]() {
-                MESH_SHADER_SUPPORTED = true;
-                requiredDeviceExtensions.insert(VK_NV_MESH_SHADER_EXTENSION_NAME);
+                MESH_SHADERING_SUPPORTED = true;
+                preparedDeviceExtensions.insert(VK_NV_MESH_SHADER_EXTENSION_NAME);
             } 
         }
     };
@@ -983,8 +980,10 @@ private:
         deviceCreateInfo.pQueueCreateInfos = queueCreateInfos.data();
         //deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
 
-        deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
-        deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
+        const std::vector<const char*> tmp {preparedDeviceExtensions.begin(), preparedDeviceExtensions.end() }; 
+
+        deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(tmp.size());
+        deviceCreateInfo.ppEnabledExtensionNames = tmp.data();
 
         if (enableValidationLayers) {
             deviceCreateInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
@@ -1853,8 +1852,9 @@ private:
 
         for (const auto& extension : availableExtensions) {
 
-            if (optionalDeviceExtensionCallbacks.count(extension.extensionName))  {
-                optionalDeviceExtensionCallbacks[extension.extensionName]();
+            if (optionalDeviceExtensionActions.count(extension.extensionName))  {
+                
+                optionalDeviceExtensionActions.at(extension.extensionName)();
             }
 
             requiredExtensions.erase(extension.extensionName);
