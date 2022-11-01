@@ -1,5 +1,7 @@
 #version 450
 
+#extension GL_EXT_shader_16bit_storage: require
+
 layout(set=0, binding=1) uniform sampler2D texSampler;
 
 layout(location = 0) in vec3 fragColor;

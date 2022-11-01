@@ -145,6 +145,20 @@ struct Vertex {
     }
 };
 
+struct Meshlet {
+    uint32_t vertices[64] {};
+    uint8_t vertexCount {};
+
+    uint8_t indices[126] {}; // max 42
+    uint8_t triangleCount {};
+};
+
+struct Mesh {
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
+    std::vector<Meshlet> meshlets;
+};
+
 namespace std {
     template<> struct hash<Vertex> {
         size_t operator()(Vertex const& vertex) const {
@@ -219,13 +233,15 @@ private:
 
     VkCommandPool commandPool;
 
-    std::vector<Vertex> vertices;
-    std::vector<uint32_t> indices;
+    Mesh defaultMesh;
 
     VkBuffer vertexBuffer;
     VkDeviceMemory vertexBufferMemory;
     VkBuffer indexBuffer;
     VkDeviceMemory indexBufferMemory;
+
+    VkBuffer meshletsBuffer; 
+    VkDeviceMemory meshletsBufferMemory;
 
     std::vector<VkBuffer> uniformBuffers;
     std::vector<VkDeviceMemory> uniformBuffersMemory;
@@ -301,14 +317,42 @@ private:
         createTextureSampler();
 
         loadModel();
-        createVertexBuffer();
-        createIndexBuffer();
+
+        if (MESH_SHADERING_SUPPORTED) {
+
+            buildMeshlets();
+        } else {
+            createVertexBuffer();
+            createIndexBuffer();
+        }
 
         createUniformBuffers();
         createDescriptorPool();
         createDescriptorSets();
         createCommandBuffers();
         createSyncObjects();
+    }
+
+    void buildMeshlets() {
+        if (!MESH_SHADERING_SUPPORTED) { return; }
+
+        VkDeviceSize bufferSize = defaultMesh.meshlets.size() * sizeof(defaultMesh.meshlets[0]);
+
+        VkBuffer stagingBuffer; VkDeviceMemory stagingBufferMemory;
+
+        createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+        void* data;
+        vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
+            memcpy(data, defaultMesh.meshlets.data(), (size_t)bufferSize);
+        vkUnmapMemory(device, stagingBufferMemory);
+
+        createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, meshletsBuffer, meshletsBufferMemory);
+
+        copyBuffer(stagingBuffer, meshletsBuffer, bufferSize);
+
+        vkDestroyBuffer(device, stagingBuffer, nullptr);
+        vkFreeMemory(device, stagingBufferMemory, nullptr);
     }
 
     void createColorResources() {
@@ -361,11 +405,11 @@ private:
                 vertex.color = {1.0f, 1.0f, 1.0f};
 
                 if (uniqueVertices.count(vertex) == 0) {
-                    uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
-                    vertices.push_back(vertex);
+                    uniqueVertices[vertex] = static_cast<uint32_t>(defaultMesh.vertices.size());
+                    defaultMesh.vertices.push_back(vertex);
                 }
 
-                indices.push_back(uniqueVertices[vertex]);
+                defaultMesh.indices.push_back(uniqueVertices[vertex]);
             }
         }
     }
@@ -1356,7 +1400,7 @@ private:
     }
 
     void createVertexBuffer() {
-        VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+        VkDeviceSize bufferSize = sizeof(defaultMesh.vertices[0]) * defaultMesh.vertices.size();
 
         VkBuffer stagingBuffer;
         VkDeviceMemory stagingBufferMemory;
@@ -1364,7 +1408,7 @@ private:
 
         void* data;
         vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
-            memcpy(data, vertices.data(), (size_t) bufferSize);
+            memcpy(data, defaultMesh.vertices.data(), (size_t) bufferSize);
         vkUnmapMemory(device, stagingBufferMemory);
 
         // createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferMemory);
@@ -1378,7 +1422,7 @@ private:
     }
 
     void createIndexBuffer() {
-        VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+        VkDeviceSize bufferSize = sizeof(defaultMesh.indices[0]) * defaultMesh.indices.size();
 
         VkBuffer stagingBuffer;
         VkDeviceMemory stagingBufferMemory;
@@ -1386,7 +1430,7 @@ private:
 
         void* data;
         vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
-            memcpy(data, indices.data(), (size_t) bufferSize);
+            memcpy(data, defaultMesh.indices.data(), (size_t) bufferSize);
         vkUnmapMemory(device, stagingBufferMemory);
 
         createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, indexBuffer, indexBufferMemory);
@@ -1478,7 +1522,7 @@ private:
                 VkDescriptorBufferInfo _bufferInfo{};
                 _bufferInfo.buffer = vertexBuffer;
                 _bufferInfo.offset = 0;
-                _bufferInfo.range = sizeof(Vertex) * vertices.size();
+                _bufferInfo.range = sizeof(Vertex) * defaultMesh.vertices.size();
 
                 descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                 descriptorWrites[2].dstSet = descriptorSets[i];
@@ -1599,58 +1643,90 @@ private:
 
                 if (PUSH_DESCRIPTOR_SUPPORTED) {
 
-                    VkDescriptorBufferInfo bufferInfo{};
-                    bufferInfo.buffer = uniformBuffers[imageIndex];
-                    bufferInfo.offset = 0;
-                    bufferInfo.range = sizeof(UniformBufferObject);
+                    std::vector<VkWriteDescriptorSet> descriptorWrites{};
+                    
+                    VkDescriptorBufferInfo uniformBufferInfo{};
+                    uniformBufferInfo.buffer = uniformBuffers[imageIndex];
+                    uniformBufferInfo.offset = 0;
+                    uniformBufferInfo.range = sizeof(UniformBufferObject);
+
+                    uint32_t idx = descriptorWrites.size();
+                    descriptorWrites.push_back(VkWriteDescriptorSet());
+
+                    descriptorWrites[idx].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                    descriptorWrites[idx].dstSet = 0;
+                    descriptorWrites[idx].dstBinding = idx;
+                    descriptorWrites[idx].dstArrayElement = 0;
+                    descriptorWrites[idx].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                    descriptorWrites[idx].descriptorCount = 1;
+                    descriptorWrites[idx].pBufferInfo = &uniformBufferInfo;
 
                     VkDescriptorImageInfo imageInfo{};
                     imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
                     imageInfo.imageView = textureImageView;
                     imageInfo.sampler = textureSampler;
 
-                    std::array<VkWriteDescriptorSet, 3> descriptorWrites{};
+                    idx += 1;
+                    descriptorWrites.push_back(VkWriteDescriptorSet());
+                    
+                    descriptorWrites[idx].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                    descriptorWrites[idx].dstSet = 0;
+                    descriptorWrites[idx].dstBinding = idx;
+                    descriptorWrites[idx].dstArrayElement = 0;
+                    descriptorWrites[idx].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                    descriptorWrites[idx].descriptorCount = 1;
+                    descriptorWrites[idx].pImageInfo = &imageInfo;
 
-                    descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                    descriptorWrites[0].dstSet = 0;
-                    descriptorWrites[0].dstBinding = 0;
-                    descriptorWrites[0].dstArrayElement = 0;
-                    descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-                    descriptorWrites[0].descriptorCount = 1;
-                    descriptorWrites[0].pBufferInfo = &bufferInfo;
+                        VkDescriptorBufferInfo _vertexBufferInfo{};
+                        _vertexBufferInfo.buffer = vertexBuffer;
+                        _vertexBufferInfo.offset = 0;
+                        _vertexBufferInfo.range = sizeof(Vertex) * defaultMesh.vertices.size();
 
-                    descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                    descriptorWrites[1].dstSet = 0;
-                    descriptorWrites[1].dstBinding = 1;
-                    descriptorWrites[1].dstArrayElement = 0;
-                    descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-                    descriptorWrites[1].descriptorCount = 1;
-                    descriptorWrites[1].pImageInfo = &imageInfo;
+                        idx += 1;
+                        descriptorWrites.push_back(VkWriteDescriptorSet());
 
-                        VkDescriptorBufferInfo _bufferInfo{};
-                        _bufferInfo.buffer = vertexBuffer;
-                        _bufferInfo.offset = 0;
-                        _bufferInfo.range = sizeof(Vertex) * vertices.size();
-
-                        descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                        descriptorWrites[2].dstSet = 0;
-                        descriptorWrites[2].dstBinding = 2;
+                        descriptorWrites[idx].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                        descriptorWrites[idx].dstSet = 0;
+                        descriptorWrites[idx].dstBinding = idx;
                         //descriptorWrites[0].dstArrayElement = 0;
-                        descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-                        descriptorWrites[2].descriptorCount = 1;
-                        descriptorWrites[2].pBufferInfo = &_bufferInfo;
+                        descriptorWrites[idx].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                        descriptorWrites[idx].descriptorCount = 1;
+                        descriptorWrites[idx].pBufferInfo = &_vertexBufferInfo;
 
-                    vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 3, descriptorWrites.data());
+                        VkDescriptorBufferInfo _meshletsBufferInfo{};
+                        _meshletsBufferInfo.buffer = meshletsBuffer;
+                        _meshletsBufferInfo.offset = 0;
+                        _meshletsBufferInfo.range = sizeof(Meshlet) * defaultMesh.meshlets.size();
+
+                        idx += 1;
+                        descriptorWrites.push_back(VkWriteDescriptorSet());
+
+                        descriptorWrites[idx].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                        descriptorWrites[idx].dstSet = 0;
+                        descriptorWrites[idx].dstBinding = idx;
+                        //descriptorWrites[0].dstArrayElement = 0;
+                        descriptorWrites[idx].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                        descriptorWrites[idx].descriptorCount = 1;
+                        descriptorWrites[idx].pBufferInfo = &_meshletsBufferInfo;
+
+                    vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, descriptorWrites.size(), descriptorWrites.data());
 
                 } else {
 
                     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
                 }
 
-            // VkBuffer vertexBuffers[] = { vertexBuffer };
-            // vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-            vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-            vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+
+            if (MESH_SHADERING_SUPPORTED) {
+                //vkCmdDrawMeshTasksEXT();
+                vkCmdDrawMeshTasksNV(commandBuffer, defaultMesh.meshlets.size(), 0);
+                
+            } else {
+                // VkBuffer vertexBuffers[] = { vertexBuffer };
+                // vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+                vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+                vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(defaultMesh.indices.size()), 1, 0, 0, 0);
+            } 
 
         vkCmdEndRenderPass(commandBuffer);
 
