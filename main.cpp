@@ -1,5 +1,6 @@
 #include "onez.h"
 
+#include <cstddef>
 #include <iterator>
 #include <map>
 #include <unordered_set>
@@ -185,7 +186,7 @@ private:
     std::unordered_set<const char*> preparedDeviceExtensions { deviceExtensions.begin(), deviceExtensions.end() };
     //= std::unordered_set<std::string>(deviceExtensions.begin(), deviceExtensions.end());
 
-    const std::map<const char*, std::function<void()>> optionalDeviceExtensionActions 
+    const std::map<std::string, std::function<void()>> optionalDeviceExtensionActions 
     {
         { 
             VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME, [&]() {
@@ -1445,6 +1446,7 @@ private:
         }
 
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            
             VkDescriptorBufferInfo bufferInfo{};
             bufferInfo.buffer = uniformBuffers[i];
             bufferInfo.offset = 0;
@@ -1598,7 +1600,7 @@ private:
                 if (PUSH_DESCRIPTOR_SUPPORTED) {
 
                     VkDescriptorBufferInfo bufferInfo{};
-                    bufferInfo.buffer = uniformBuffers[imageIndex%3];
+                    bufferInfo.buffer = uniformBuffers[imageIndex];
                     bufferInfo.offset = 0;
                     bufferInfo.range = sizeof(UniformBufferObject);
 
