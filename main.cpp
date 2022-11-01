@@ -1,5 +1,9 @@
 #include "onez.h"
 
+#include <iterator>
+#include <map>
+#include <unordered_set>
+
 // #if defined(_WIN32)
 // #   define VK_USE_PLATFORM_WIN32_KHR
 // #elif defined(__linux__) || defined(__unix__)
@@ -64,12 +68,15 @@ const std::vector<const char*> validationLayers = {
 
 const std::vector<const char*> deviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-    VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
 #ifdef __APPLE__ //https://github.com/KhronosGroup/MoltenVK/issues/1626
     "VK_KHR_portability_subset",
 #endif
     VK_KHR_8BIT_STORAGE_EXTENSION_NAME,
     VK_KHR_16BIT_STORAGE_EXTENSION_NAME,
+};
+
+const std::vector<const char*> optionalDeviceExtensions = {
+    VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
 };
 
 #ifdef NDEBUG
@@ -157,24 +164,7 @@ struct UniformBufferObject {
     alignas(16) glm::mat4 proj;
 };
 
-// const std::vector<Vertex> vertices = {
-//     {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-//     {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-//     {{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-//     {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
-
-//     {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-//     {{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-//     {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-//     {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
-// };
-
-// const std::vector<uint16_t> indices = {
-//     0, 1, 2, 2, 3, 0,
-//     4, 5, 6, 6, 7, 4
-// };
-
-class HelloVK {
+class HeVK {
 public:
     void run() {
         initWindow();
@@ -187,11 +177,32 @@ private:
     GLFWwindow* window;
 
     VkInstance instance;
-    VkDebugUtilsMessengerEXT debugMessenger;
     VkSurfaceKHR surface;
+    VkDebugUtilsMessengerEXT debugMessenger;
 
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkDevice device;
+
+    bool PUSH_DESCRIPTOR_SUPPORTED = false;
+    bool MESH_SHADER_SUPPORTED = false;
+
+    std::unordered_set<const char*> requiredDeviceExtensions(deviceExtensions.begin(), deviceExtensions.end());
+
+    const std::map<std::string, std::function<void()>> optionalDeviceExtensionCallbacks 
+    {
+        { 
+            VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME, [&]() {
+                PUSH_DESCRIPTOR_SUPPORTED = true;
+                requiredDeviceExtensions.insert(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
+            } 
+        },
+        { 
+            VK_NV_MESH_SHADER_EXTENSION_NAME, [&]() {
+                MESH_SHADER_SUPPORTED = true;
+                requiredDeviceExtensions.insert(VK_NV_MESH_SHADER_EXTENSION_NAME);
+            } 
+        }
+    };
 
     VkQueue graphicsQueue;
     VkQueue presentQueue;
@@ -224,8 +235,6 @@ private:
     VkDescriptorPool descriptorPool;
     std::vector<VkDescriptorSet> descriptorSets;
     std::vector<VkCommandBuffer> commandBuffers;
-
-    std::array<VkWriteDescriptorSet, 3> writeDescriptorArray;
 
     uint32_t mipLevels;
     VkImage textureImage;
@@ -262,7 +271,7 @@ private:
     }
 
     static void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
-        auto app = reinterpret_cast<HelloVK*>(glfwGetWindowUserPointer(window));
+        auto app = reinterpret_cast<HeVK*>(glfwGetWindowUserPointer(window));
         app->framebufferResized = true;
     }
 
@@ -857,7 +866,7 @@ private:
 
         VkApplicationInfo appInfo{};
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        appInfo.pApplicationName = "Hello Triangle";
+        appInfo.pApplicationName = "HeVK";
         appInfo.applicationVersion = VK_MAKE_VERSION(1, 2, 0);
         appInfo.pEngineName = "No Engine";
         appInfo.engineVersion = VK_MAKE_VERSION(1, 2, 0);
@@ -972,7 +981,6 @@ private:
 
         deviceCreateInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
         deviceCreateInfo.pQueueCreateInfos = queueCreateInfos.data();
-
         //deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
 
         deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
@@ -1160,10 +1168,13 @@ private:
         std::array<VkDescriptorSetLayoutBinding, 3> bindings = {uboLayoutBinding, samplerLayoutBinding, vertexLayoutBinding};
 
         VkDescriptorSetLayoutCreateInfo layoutInfo{};
-        layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
         layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
         layoutInfo.pBindings = bindings.data();
+
+            if (PUSH_DESCRIPTOR_SUPPORTED) {
+                layoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
+            }
 
         if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &descriptorSetLayout) != VK_SUCCESS) {
             throw std::runtime_error("failed to create descriptor set layout!");
@@ -1420,7 +1431,7 @@ private:
 
     void createDescriptorSets() {
 
-        return;
+        if (PUSH_DESCRIPTOR_SUPPORTED) { return; }
 
         std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
         VkDescriptorSetAllocateInfo allocInfo{};
@@ -1430,9 +1441,9 @@ private:
         allocInfo.pSetLayouts = layouts.data();
 
         descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-        // if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
-        //     throw std::runtime_error("failed to allocate descriptor sets!");
-        // }
+        if (vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()) != VK_SUCCESS) {
+            throw std::runtime_error("failed to allocate descriptor sets!");
+        }
 
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             VkDescriptorBufferInfo bufferInfo{};
@@ -1476,7 +1487,7 @@ private:
                 descriptorWrites[2].descriptorCount = 1;
                 descriptorWrites[2].pBufferInfo = &_bufferInfo;
 
-            // vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+            vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
         }
     }
 
@@ -1585,6 +1596,8 @@ private:
 
             VkDeviceSize offsets[] = {0};
 
+                if (PUSH_DESCRIPTOR_SUPPORTED) {
+
                     VkDescriptorBufferInfo bufferInfo{};
                     bufferInfo.buffer = uniformBuffers[imageIndex%3];
                     bufferInfo.offset = 0;
@@ -1626,14 +1639,16 @@ private:
                         descriptorWrites[2].descriptorCount = 1;
                         descriptorWrites[2].pBufferInfo = &_bufferInfo;
 
-            writeDescriptorArray = descriptorWrites;
+                    vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 3, descriptorWrites.data());
 
-            vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 3, writeDescriptorArray.data());
+                } else {
+
+                    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
+                }
+
             // VkBuffer vertexBuffers[] = { vertexBuffer };
             // vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
             vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-
-            //vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
             vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
         vkCmdEndRenderPass(commandBuffer);
@@ -1837,6 +1852,11 @@ private:
         std::set<std::string> requiredExtensions(deviceExtensions.begin(), deviceExtensions.end());
 
         for (const auto& extension : availableExtensions) {
+
+            if (optionalDeviceExtensionCallbacks.count(extension.extensionName))  {
+                optionalDeviceExtensionCallbacks[extension.extensionName]();
+            }
+
             requiredExtensions.erase(extension.extensionName);
         }
 
@@ -1923,7 +1943,7 @@ private:
 
 int main() {
 
-    HelloVK app;
+    HeVK app;
 
     glslang_initialize_process();
 
