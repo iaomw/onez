@@ -1653,13 +1653,13 @@ private:
                     uint32_t idx = descriptorWrites.size();
                     descriptorWrites.push_back(VkWriteDescriptorSet());
 
-                    descriptorWrites[idx].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                    descriptorWrites[idx].dstSet = 0;
-                    descriptorWrites[idx].dstBinding = idx;
-                    descriptorWrites[idx].dstArrayElement = 0;
-                    descriptorWrites[idx].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-                    descriptorWrites[idx].descriptorCount = 1;
-                    descriptorWrites[idx].pBufferInfo = &uniformBufferInfo;
+                    descriptorWrites.back().sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                    descriptorWrites.back().dstSet = 0;
+                    descriptorWrites.back().dstBinding = idx;
+                    descriptorWrites.back().dstArrayElement = 0;
+                    descriptorWrites.back().descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                    descriptorWrites.back().descriptorCount = 1;
+                    descriptorWrites.back().pBufferInfo = &uniformBufferInfo;
 
                     VkDescriptorImageInfo imageInfo{};
                     imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -1669,13 +1669,13 @@ private:
                     idx += 1;
                     descriptorWrites.push_back(VkWriteDescriptorSet());
                     
-                    descriptorWrites[idx].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                    descriptorWrites[idx].dstSet = 0;
-                    descriptorWrites[idx].dstBinding = idx;
-                    descriptorWrites[idx].dstArrayElement = 0;
-                    descriptorWrites[idx].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-                    descriptorWrites[idx].descriptorCount = 1;
-                    descriptorWrites[idx].pImageInfo = &imageInfo;
+                    descriptorWrites.back().sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                    descriptorWrites.back().dstSet = 0;
+                    descriptorWrites.back().dstBinding = idx;
+                    descriptorWrites.back().dstArrayElement = 0;
+                    descriptorWrites.back().descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                    descriptorWrites.back().descriptorCount = 1;
+                    descriptorWrites.back().pImageInfo = &imageInfo;
 
                         VkDescriptorBufferInfo _vertexBufferInfo{};
                         _vertexBufferInfo.buffer = vertexBuffer;
@@ -1685,29 +1685,31 @@ private:
                         idx += 1;
                         descriptorWrites.push_back(VkWriteDescriptorSet());
 
-                        descriptorWrites[idx].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                        descriptorWrites[idx].dstSet = 0;
-                        descriptorWrites[idx].dstBinding = idx;
-                        //descriptorWrites[0].dstArrayElement = 0;
-                        descriptorWrites[idx].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-                        descriptorWrites[idx].descriptorCount = 1;
-                        descriptorWrites[idx].pBufferInfo = &_vertexBufferInfo;
+                        descriptorWrites.back().sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                        descriptorWrites.back().dstSet = 0;
+                        descriptorWrites.back().dstBinding = idx;
+                        descriptorWrites.back().dstArrayElement = 0;
+                        descriptorWrites.back().descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                        descriptorWrites.back().descriptorCount = 1;
+                        descriptorWrites.back().pBufferInfo = &_vertexBufferInfo;
 
-                        VkDescriptorBufferInfo _meshletsBufferInfo{};
-                        _meshletsBufferInfo.buffer = meshletsBuffer;
-                        _meshletsBufferInfo.offset = 0;
-                        _meshletsBufferInfo.range = sizeof(Meshlet) * defaultMesh.meshlets.size();
+                        if (MESH_SHADERING_SUPPORTED) {
+                            VkDescriptorBufferInfo _meshletsBufferInfo{};
+                            _meshletsBufferInfo.buffer = meshletsBuffer;
+                            _meshletsBufferInfo.offset = 0;
+                            _meshletsBufferInfo.range = sizeof(Meshlet) * defaultMesh.meshlets.size();
 
-                        idx += 1;
-                        descriptorWrites.push_back(VkWriteDescriptorSet());
+                            idx += 1;
+                            descriptorWrites.push_back(VkWriteDescriptorSet());
 
-                        descriptorWrites[idx].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                        descriptorWrites[idx].dstSet = 0;
-                        descriptorWrites[idx].dstBinding = idx;
-                        //descriptorWrites[0].dstArrayElement = 0;
-                        descriptorWrites[idx].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-                        descriptorWrites[idx].descriptorCount = 1;
-                        descriptorWrites[idx].pBufferInfo = &_meshletsBufferInfo;
+                            descriptorWrites.back().sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                            descriptorWrites.back().dstSet = 0;
+                            descriptorWrites.back().dstBinding = idx;
+                            descriptorWrites.back().dstArrayElement = 0;
+                            descriptorWrites.back().descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                            descriptorWrites.back().descriptorCount = 1;
+                            descriptorWrites.back().pBufferInfo = &_meshletsBufferInfo;
+                        }
 
                     vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, descriptorWrites.size(), descriptorWrites.data());
 
