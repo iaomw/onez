@@ -12,8 +12,8 @@ layout(set=0, binding=0) uniform UniformBufferObject {
 
     struct Vertex
     {
-        vec3 pos;
-        vec3 color;
+        vec3 position;
+        vec3 normal;
         vec2 coord;
     };
 
@@ -38,8 +38,8 @@ void main() {
 
     Vertex v_pulling = vertices[gl_VertexIndex];
 
-    vec3 inPosition = v_pulling.pos;
-    vec3 inColor = v_pulling.color;
+    vec3 inPosition = v_pulling.position;
+    vec3 inColor = v_pulling.normal;
     vec2 inCoord = v_pulling.coord;
 
 #endif

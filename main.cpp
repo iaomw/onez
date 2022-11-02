@@ -1,6 +1,8 @@
 #include "onez.h"
 
 #include <cstddef>
+#include <glm/ext/vector_float2_precision.hpp>
+#include <glm/fwd.hpp>
 #include <iterator>
 #include <map>
 #include <unordered_set>
@@ -106,9 +108,10 @@ struct SwapChainSupportDetails {
 };
 
 struct Vertex {
-    alignas(16) glm::vec3 pos;
-    alignas(16) glm::vec3 color;
-    alignas(16) glm::vec2 texCoord;
+    alignas(16) glm::vec3 position;
+    alignas(16) glm::vec3 normal;
+    alignas(16) glm::vec2 coord;
+    // glm::mediump_vec2 uv;
 
     static VkVertexInputBindingDescription getBindingDescription() {
         VkVertexInputBindingDescription bindingDescription{};
@@ -125,32 +128,32 @@ struct Vertex {
         attributeDescriptions[0].binding = 0;
         attributeDescriptions[0].location = 0;
         attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[0].offset = offsetof(Vertex, pos);
+        attributeDescriptions[0].offset = offsetof(Vertex, position);
 
         attributeDescriptions[1].binding = 0;
         attributeDescriptions[1].location = 1;
         attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[1].offset = offsetof(Vertex, color);
+        attributeDescriptions[1].offset = offsetof(Vertex, normal);
 
         attributeDescriptions[2].binding = 0;
         attributeDescriptions[2].location = 2;
         attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
-        attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
+        attributeDescriptions[2].offset = offsetof(Vertex, coord);
 
         return attributeDescriptions;
     }
 
     bool operator==(const Vertex& other) const {
-        return pos == other.pos && color == other.color && texCoord == other.texCoord;
+        return position == other.position && normal == other.normal && coord == other.coord;
     }
 };
 
 struct Meshlet {
     uint32_t vertices[64] {};
-    uint8_t vertexCount {};
+    uint8_t indices[126] {}; // max 42 tri
 
-    uint8_t indices[126] {}; // max 42
-    uint8_t triangleCount {};
+    uint8_t vertexCount {};
+    uint8_t indexCount {};
 };
 
 struct Mesh {
@@ -162,9 +165,9 @@ struct Mesh {
 namespace std {
     template<> struct hash<Vertex> {
         size_t operator()(Vertex const& vertex) const {
-            return ((hash<glm::vec3>()(vertex.pos) ^
-                   (hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
-                   (hash<glm::vec2>()(vertex.texCoord) << 1);
+            return ((hash<glm::vec3>()(vertex.position) ^
+                   (hash<glm::vec3>()(vertex.normal) << 1)) >> 1) ^
+                   (hash<glm::vec2>()(vertex.coord) << 1);
         }
     };
 }
@@ -318,11 +321,12 @@ private:
 
         loadModel();
 
-        if (MESH_SHADERING_SUPPORTED) {
+        createVertexBuffer();
 
+        if (MESH_SHADERING_SUPPORTED) {
             buildMeshlets();
+            buildMeshletsBuffer();
         } else {
-            createVertexBuffer();
             createIndexBuffer();
         }
 
@@ -334,6 +338,59 @@ private:
     }
 
     void buildMeshlets() {
+        
+        auto& mesh = defaultMesh; Meshlet meshlet = {};
+
+        std::vector<uint8_t> meshletVertices(mesh.vertices.size(), 0xff);
+
+        for (size_t i = 0; i < mesh.indices.size(); i += 3)
+        {
+            unsigned int a = mesh.indices[i + 0];
+            unsigned int b = mesh.indices[i + 1];
+            unsigned int c = mesh.indices[i + 2];
+
+            uint8_t& av = meshletVertices[a];
+            uint8_t& bv = meshletVertices[b];
+            uint8_t& cv = meshletVertices[c];
+
+            if (meshlet.vertexCount + (av == 0xff) + (bv == 0xff) + (cv == 0xff) > 64 || meshlet.indexCount + 3 > 126)
+            {
+                mesh.meshlets.push_back(meshlet);
+
+                for (size_t j = 0; j < meshlet.vertexCount; ++j)
+                    meshletVertices[meshlet.vertices[j]] = 0xff;
+
+                meshlet = {};
+            }
+
+            if (av == 0xff)
+            {
+                av = meshlet.vertexCount;
+                meshlet.vertices[meshlet.vertexCount++] = a;
+            }
+
+            if (bv == 0xff)
+            {
+                bv = meshlet.vertexCount;
+                meshlet.vertices[meshlet.vertexCount++] = b;
+            }
+
+            if (cv == 0xff)
+            {
+                cv = meshlet.vertexCount;
+                meshlet.vertices[meshlet.vertexCount++] = c;
+            }
+
+            meshlet.indices[meshlet.indexCount++] = av;
+            meshlet.indices[meshlet.indexCount++] = bv;
+            meshlet.indices[meshlet.indexCount++] = cv;
+        }
+
+        if (meshlet.indexCount)
+            mesh.meshlets.push_back(meshlet);
+    }
+
+    void buildMeshletsBuffer() {
         if (!MESH_SHADERING_SUPPORTED) { return; }
 
         VkDeviceSize bufferSize = defaultMesh.meshlets.size() * sizeof(defaultMesh.meshlets[0]);
@@ -389,20 +446,31 @@ private:
 
         std::unordered_map<Vertex, uint32_t> uniqueVertices{};
 
+        float scale = 1.0f;
+
         for (const auto& shape : shapes) {
             for (const auto& index : shape.mesh.indices) {
                 Vertex vertex{};
-                vertex.pos = {
-                    attrib.vertices[3 * index.vertex_index + 0],
-                    attrib.vertices[3 * index.vertex_index + 1],
-                    attrib.vertices[3 * index.vertex_index + 2]
-                };
-                vertex.texCoord = {
-                    attrib.texcoords[2 * index.texcoord_index + 0],
-                    1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+                vertex.position = {
+                    attrib.vertices[3 * index.vertex_index + 0]*scale,
+                    attrib.vertices[3 * index.vertex_index + 1]*scale,
+                    attrib.vertices[3 * index.vertex_index + 2]*scale
                 };
 
-                vertex.color = {1.0f, 1.0f, 1.0f};
+                if (attrib.texcoords.size() > 0) {
+                    vertex.coord = {
+                        attrib.texcoords[2 * index.texcoord_index + 0],
+                        1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+                    };
+                }
+
+                if (attrib.normals.size() > 0) {
+                    vertex.normal = {
+                        attrib.normals[3 * index.normal_index + 0], 
+                        attrib.normals[3 * index.normal_index + 1], 
+                        attrib.normals[3 * index.normal_index + 2]
+                    };
+                }
 
                 if (uniqueVertices.count(vertex) == 0) {
                     uniqueVertices[vertex] = static_cast<uint32_t>(defaultMesh.vertices.size());
@@ -1050,8 +1118,33 @@ private:
         features11.storageBuffer16BitAccess = true;
         features11.shaderDrawParameters = true;
 
+        VkPhysicalDeviceVulkan12Features features12 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
+        
+            features12.uniformAndStorageBuffer8BitAccess = true;
+            features12.storageBuffer8BitAccess = true;
+
+            features12.shaderFloat16 = true;
+            features12.shaderInt8 = true;
+
+            features12.samplerFilterMinmax = true;
+            features12.scalarBlockLayout = true;
+            features12.drawIndirectCount = true;
+
         deviceCreateInfo.pNext = &features;
+
         features.pNext = &features11;
+        features11.pNext = &features12;
+
+        if (MESH_SHADERING_SUPPORTED) {
+            VkPhysicalDeviceMeshShaderFeaturesNV featuresMesh = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_NV };
+            featuresMesh.meshShader = true;
+
+        // VkPhysicalDeviceMeshShaderFeaturesEXT featuresMesh = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT };
+	    // featuresMesh.taskShader = true;
+	    // featuresMesh.meshShader = true;
+
+            features12.pNext = &featuresMesh;
+        }
 
         if (vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device) != VK_SUCCESS) {
             throw std::runtime_error("failed to create logical device!");
@@ -1188,12 +1281,18 @@ private:
     }
 
     void createDescriptorSetLayout() {
+
+        std::vector<VkDescriptorSetLayoutBinding> bindings;
+        bindings.reserve(4);
+
         VkDescriptorSetLayoutBinding uboLayoutBinding{};
         uboLayoutBinding.binding = 0;
         uboLayoutBinding.descriptorCount = 1;
         uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         uboLayoutBinding.pImmutableSamplers = nullptr;
         uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+        bindings.push_back(uboLayoutBinding);
 
         VkDescriptorSetLayoutBinding samplerLayoutBinding{};
         samplerLayoutBinding.binding = 1;
@@ -1202,14 +1301,27 @@ private:
         samplerLayoutBinding.pImmutableSamplers = nullptr;
         samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
+        bindings.push_back(samplerLayoutBinding);
+
             VkDescriptorSetLayoutBinding vertexLayoutBinding{};
             vertexLayoutBinding.binding = 2;
             vertexLayoutBinding.descriptorCount = 1;
             vertexLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
             vertexLayoutBinding.pImmutableSamplers = nullptr;
-            vertexLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+            vertexLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_MESH_BIT_NV;
 
-        std::array<VkDescriptorSetLayoutBinding, 3> bindings = {uboLayoutBinding, samplerLayoutBinding, vertexLayoutBinding};
+            bindings.push_back(vertexLayoutBinding);
+
+            if (MESH_SHADERING_SUPPORTED) {
+                VkDescriptorSetLayoutBinding meshletsLayoutBinding{};
+                meshletsLayoutBinding.binding = 3;
+                meshletsLayoutBinding.descriptorCount = 1;
+                meshletsLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                meshletsLayoutBinding.pImmutableSamplers = nullptr;
+                meshletsLayoutBinding.stageFlags = VK_SHADER_STAGE_MESH_BIT_NV;
+
+                bindings.push_back(meshletsLayoutBinding);
+            }
 
         VkDescriptorSetLayoutCreateInfo layoutInfo{};
         layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -1229,25 +1341,44 @@ private:
 
         _Shader vertShader {}, fragShader {};
 
-        loadinShader(vertShader, device, "../shaders/shader.vert");
-        loadinShader(fragShader, device, "../shaders/shader.frag");
+        //_Shader taskShader{}; 
+        _Shader meshShader{};
 
-        SpirvReflectExample(vertShader.SPIRV.data(), vertShader.SPIRV.size() * sizeof(uint32_t));
+        if (MESH_SHADERING_SUPPORTED) {
+            //loadinShader(taskShader, device, "../shaders/shader.task.glsl");
+            loadinShader(meshShader, device, "../shaders/test.mesh.glsl");
+            loadinShader(fragShader, device, "../shaders/test.frag.glsl");
+        } else {
+            loadinShader(vertShader, device, "../shaders/shader.vert");
+            loadinShader(fragShader, device, "../shaders/shader.frag");
+        }
 
-        VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
-        vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-        vertShaderStageInfo.module = vertShader.vkModule;
-        vertShaderStageInfo.pName = "main";
+        std::vector<VkPipelineShaderStageCreateInfo> shaderStages{}; //= {vertShaderStageInfo, fragShaderStageInfo};
+        shaderStages.reserve(3);
+
+        if (MESH_SHADERING_SUPPORTED) {
+            VkPipelineShaderStageCreateInfo meshShaderStageInfo{};
+            meshShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            meshShaderStageInfo.stage = VK_SHADER_STAGE_MESH_BIT_NV; //VK_SHADER_STAGE_MESH_BIT_EXT;
+            meshShaderStageInfo.module = meshShader.vkModule;
+            meshShaderStageInfo.pName = "main";
+            shaderStages.push_back(meshShaderStageInfo);
+        } else {
+            VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+            vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+            vertShaderStageInfo.module = vertShader.vkModule;
+            vertShaderStageInfo.pName = "main";
+            shaderStages.push_back(vertShaderStageInfo);
+        }
 
         VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
         fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
         fragShaderStageInfo.module = fragShader.vkModule;
         fragShaderStageInfo.pName = "main";
-
-        VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
-
+        shaderStages.push_back(fragShaderStageInfo);
+        
         VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
         vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
@@ -1335,8 +1466,8 @@ private:
 
         VkGraphicsPipelineCreateInfo pipelineInfo{};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        pipelineInfo.stageCount = 2;
-        pipelineInfo.pStages = shaderStages;
+        pipelineInfo.stageCount = shaderStages.size();
+        pipelineInfo.pStages = shaderStages.data();
         pipelineInfo.pVertexInputState = &vertexInputInfo;
         pipelineInfo.pInputAssemblyState = &inputAssembly;
         pipelineInfo.pViewportState = &viewportState;
@@ -1355,7 +1486,9 @@ private:
             throw std::runtime_error("failed to create graphics pipeline!");
         }
 
-        //graphicsPipeline = meshPipeline;
+        if (MESH_SHADERING_SUPPORTED) {
+            vkDestroyShaderModule(device, meshShader.vkModule, nullptr);
+        }
 
         vkDestroyShaderModule(device, fragShader.vkModule, nullptr);
         vkDestroyShaderModule(device, vertShader.vkModule, nullptr);
@@ -1720,7 +1853,7 @@ private:
 
 
             if (MESH_SHADERING_SUPPORTED) {
-                //vkCmdDrawMeshTasksEXT();
+                //vkCmdDrawMeshTasksEXT(commandBuffer, defaultMesh.meshlets.size(), 1, 1);
                 vkCmdDrawMeshTasksNV(commandBuffer, defaultMesh.meshlets.size(), 0);
                 
             } else {

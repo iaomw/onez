@@ -1,5 +1,7 @@
 #include "BuilderSPIRV.h"
 
+#include <cstring>
+#include <glslang/Include/glslang_c_shader_types.h>
 #include <glslang/StandAlone/ResourceLimits.cpp>
 
 #include <cassert>
@@ -64,27 +66,39 @@ int endsWith(const char* s, const char* part)
 	return (strstr( s, part ) - s) == (strlen( s ) - strlen( part ));
 }
 
-glslang_stage_t glslangShaderStageFromFileName(const char* fileName)
+static const std::map<std::string, glslang_stage_t> STAGE_MAP {
+	{".vert", GLSLANG_STAGE_VERTEX  },
+	{".frag", GLSLANG_STAGE_FRAGMENT},
+	{".geom", GLSLANG_STAGE_GEOMETRY},
+
+	{".comp", GLSLANG_STAGE_COMPUTE },
+
+	{".tesc", GLSLANG_STAGE_TESSCONTROL   },
+	{".tese", GLSLANG_STAGE_TESSEVALUATION},
+
+	{".task", GLSLANG_STAGE_TASK_NV},
+	{".mesh", GLSLANG_STAGE_MESH_NV}
+};
+
+glslang_stage_t glslangShaderStageFromFileName(const char* filePath)
 {
-	if (endsWith(fileName, ".vert"))
-		return GLSLANG_STAGE_VERTEX;
+	auto fileName = std::filesystem::path(filePath).filename();
+	auto extension = fileName.extension();
 
-	if (endsWith(fileName, ".frag"))
-		return GLSLANG_STAGE_FRAGMENT;
+	static const auto extensionGLSL = std::string(".glsl");
 
-	if (endsWith(fileName, ".geom"))
-		return GLSLANG_STAGE_GEOMETRY;
+	auto isGLSL = extensionGLSL == extension.string();
 
-	if (endsWith(fileName, ".comp"))
-		return GLSLANG_STAGE_COMPUTE;
+	if (isGLSL) {
+		extension = fileName.stem().extension();
+	}
 
-	if (endsWith(fileName, ".tesc"))
-		return GLSLANG_STAGE_TESSCONTROL;
+	if (STAGE_MAP.count(extension)) {
+		auto x = STAGE_MAP.at(extension);
+		return x;
+	} 
 
-	if (endsWith(fileName, ".tese"))
-		return GLSLANG_STAGE_TESSEVALUATION;
-
-	return GLSLANG_STAGE_VERTEX;
+	return GLSLANG_STAGE_FRAGMENT;
 }
 
 void printShaderSource(const char* text)
@@ -182,8 +196,10 @@ size_t compileShaderData(glslang_stage_t stage, const char* shaderSource, _Shade
 
 size_t compileShaderFile(const char* file, _Shader& _shader)
 {
-	if (auto shaderSource = readFileGLSL(file); !shaderSource.empty())
-		return compileShaderData(glslangShaderStageFromFileName(file), shaderSource.c_str(), _shader);
+	if (auto shaderSource = readFileGLSL(file); !shaderSource.empty()) {
+		auto stage = glslangShaderStageFromFileName(file);
+		return compileShaderData(stage, shaderSource.c_str(), _shader);
+	}
 
 	return 0;
 }
@@ -284,10 +300,16 @@ static VkShaderStageFlagBits getShaderStage(SpvExecutionModel executionModel)
 		return VK_SHADER_STAGE_FRAGMENT_BIT;
 	case SpvExecutionModelGLCompute:
 		return VK_SHADER_STAGE_COMPUTE_BIT;
+		
 	case SpvExecutionModelTaskEXT:
 		return VK_SHADER_STAGE_TASK_BIT_EXT;
 	case SpvExecutionModelMeshEXT:
 		return VK_SHADER_STAGE_MESH_BIT_EXT;
+
+	case SpvExecutionModelTaskNV:
+		return VK_SHADER_STAGE_TASK_BIT_NV;
+	case SpvExecutionModelMeshNV:
+		return VK_SHADER_STAGE_MESH_BIT_NV;
 
 	default:
 		assert(!"Unsupported execution model");

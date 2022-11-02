@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <filesystem>
 
 // #include <glslang/Include/ResourceLimits.h>
 #include <glslang/Include/glslang_c_interface.h>
