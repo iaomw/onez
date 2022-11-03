@@ -1,10 +1,12 @@
 #include "onez.h"
 
+#include <cassert>
 #include <cstddef>
 #include <glm/ext/vector_float2_precision.hpp>
 #include <glm/fwd.hpp>
 #include <iterator>
 #include <map>
+#include <string>
 #include <unordered_set>
 
 // #if defined(_WIN32)
@@ -61,6 +63,7 @@ const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
 const std::string MODEL_PATH = "viking_room/viking_room.obj";
+            // "/home/iaomw/Public/San_Miguel/san-miguel.obj";
 const std::string TEXTURE_PATH = "viking_room/viking_room.png";
 
 const int MAX_FRAMES_IN_FLIGHT = 3;
@@ -178,6 +181,18 @@ struct UniformBufferObject {
     alignas(16) glm::mat4 proj;
 };
 
+VkQueryPool createQueryPool(VkDevice device, uint32_t queryCount) 
+{ 
+	VkQueryPoolCreateInfo createInfo = { VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO }; 
+	createInfo.queryType = VK_QUERY_TYPE_TIMESTAMP; 
+	createInfo.queryCount = queryCount; 
+ 
+	VkQueryPool queryPool = 0; 
+	VK_CHECK(vkCreateQueryPool(device, &createInfo, 0, &queryPool)); 
+ 
+	return queryPool; 
+} 
+
 class HeVK {
 public:
     void run() {
@@ -195,7 +210,11 @@ private:
     VkDebugUtilsMessengerEXT debugMessenger;
 
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+    VkPhysicalDeviceProperties deviceProperties;
+    
     VkDevice device;
+ 
+    VkQueryPool queryPool;
 
     bool PUSH_DESCRIPTOR_SUPPORTED = false;
     bool MESH_SHADERING_SUPPORTED = false;
@@ -203,18 +222,31 @@ private:
     std::unordered_set<const char*> preparedDeviceExtensions { deviceExtensions.begin(), deviceExtensions.end() };
     //= std::unordered_set<std::string>(deviceExtensions.begin(), deviceExtensions.end());
 
+    std::function<void(VkCommandBuffer&)> meshShaderDraw;
+
     const std::map<std::string, std::function<void()>> optionalDeviceExtensionActions 
     {
-        { 
-            VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME, [&]() {
+        {   VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME, [&]() {
                 PUSH_DESCRIPTOR_SUPPORTED = true;
                 preparedDeviceExtensions.insert(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
             } 
         },
-        { 
-            VK_NV_MESH_SHADER_EXTENSION_NAME, [&]() {
+        {   VK_NV_MESH_SHADER_EXTENSION_NAME, [&]() {
                 MESH_SHADERING_SUPPORTED = true;
                 preparedDeviceExtensions.insert(VK_NV_MESH_SHADER_EXTENSION_NAME);
+
+                meshShaderDraw = [&](VkCommandBuffer& commandBuffer) {
+                    vkCmdDrawMeshTasksNV(commandBuffer, defaultMesh.meshlets.size(), 0);
+                };
+            } 
+        },
+        {   VK_EXT_MESH_SHADER_EXTENSION_NAME, [&]() {
+                MESH_SHADERING_SUPPORTED = true;
+                preparedDeviceExtensions.insert(VK_EXT_MESH_SHADER_EXTENSION_NAME);
+
+                meshShaderDraw = [&](VkCommandBuffer& commandBuffer) {
+                    vkCmdDrawMeshTasksEXT(commandBuffer, defaultMesh.meshlets.size(), 1, 1);
+                };
             } 
         }
     };
@@ -309,6 +341,10 @@ private:
         createRenderPass();
         createDescriptorSetLayout();
         createGraphicsPipeline();
+
+        queryPool = createQueryPool(device, 128); 
+        assert(queryPool);
+
         createCommandPool();
 
         createColorResources();
@@ -870,9 +906,35 @@ private:
     }
 
     void mainLoop() {
+
+        double frameAvgCPU = 0;
+        double frameAvgGPU = 0;
+
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents();
-            drawFrame();
+
+            auto frameBeginCPU = glfwGetTime();
+                drawFrame();
+            auto frameEndCPU = glfwGetTime();
+
+            auto frameTimeCPU = frameEndCPU - frameBeginCPU;
+            frameTimeCPU *= 1000;
+
+            uint64_t queryResults[2]; 
+		    //VK_CHECK(
+                vkGetQueryPoolResults(device, queryPool, 0, ARRAYSIZE(queryResults), sizeof(queryResults), queryResults, sizeof(queryResults[0]), VK_QUERY_RESULT_64_BIT);
+            //    ); 
+
+            double frameBeginGPU = double(queryResults[0]) * deviceProperties.limits.timestampPeriod * 1e-6; 
+		    double frameEndGPU = double(queryResults[1]) * deviceProperties.limits.timestampPeriod * 1e-6; 
+
+            auto frameTimeGPU = frameEndGPU - frameBeginGPU;
+
+            char buff[128];
+            snprintf(buff, sizeof(buff), "cputime %.2f ms, gputime %.2f ms, fps %.2f, %lu triangles", 
+                                        frameTimeCPU, frameTimeGPU, 1000/frameTimeCPU, defaultMesh.indices.size()/3);
+
+            glfwSetWindowTitle(window, buff);
         }
 
         vkDeviceWaitIdle(device);
@@ -1063,6 +1125,10 @@ private:
         if (physicalDevice == VK_NULL_HANDLE) {
             throw std::runtime_error("failed to find a suitable GPU!");
         }
+
+        deviceProperties = {}; 
+	    vkGetPhysicalDeviceProperties(physicalDevice, &deviceProperties); 
+	    bool supportTiming = deviceProperties.limits.timestampComputeAndGraphics;
     }
 
     void createLogicalDevice() {
@@ -1290,7 +1356,7 @@ private:
         uboLayoutBinding.descriptorCount = 1;
         uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         uboLayoutBinding.pImmutableSamplers = nullptr;
-        uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_MESH_BIT_NV;
 
         bindings.push_back(uboLayoutBinding);
 
@@ -1740,6 +1806,9 @@ private:
             throw std::runtime_error("failed to begin recording command buffer!");
         }
 
+        vkCmdResetQueryPool(commandBuffer, queryPool, 0, 128);
+        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPool, 0);
+
         VkRenderPassBeginInfo renderPassInfo{};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         renderPassInfo.renderPass = renderPass;
@@ -1853,8 +1922,10 @@ private:
 
 
             if (MESH_SHADERING_SUPPORTED) {
-                //vkCmdDrawMeshTasksEXT(commandBuffer, defaultMesh.meshlets.size(), 1, 1);
-                vkCmdDrawMeshTasksNV(commandBuffer, defaultMesh.meshlets.size(), 0);
+
+                meshShaderDraw(commandBuffer);
+                // vkCmdDrawMeshTasksEXT(commandBuffer, defaultMesh.meshlets.size(), 1, 1);
+                // vkCmdDrawMeshTasksNV(commandBuffer, defaultMesh.meshlets.size(), 0);
                 
             } else {
                 // VkBuffer vertexBuffers[] = { vertexBuffer };
@@ -1864,6 +1935,7 @@ private:
             } 
 
         vkCmdEndRenderPass(commandBuffer);
+        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPool, 1);
 
         if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
             throw std::runtime_error("failed to record command buffer!");
@@ -1986,7 +2058,7 @@ private:
 
     VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) {
         for (const auto& availablePresentMode : availablePresentModes) {
-            if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
+            if (availablePresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
                 return availablePresentMode;
             }
         }

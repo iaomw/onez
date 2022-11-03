@@ -12,6 +12,12 @@
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 layout(triangles, max_vertices = 64, max_primitives = 42) out;
 
+layout(set=0, binding=0) uniform UniformBufferObject {
+    mat4 model;
+    mat4 view;
+    mat4 proj;
+} ubo;
+
 struct Vertex
 {
 	vec3 position;
@@ -53,7 +59,8 @@ void main()
 		vec3 normal = vertices[vi].normal;
 		vec2 coord = vertices[vi].coord;  
 
-		gl_MeshVerticesNV[i].gl_Position = vec4(position * vec3(1, 1, 0.5) + vec3(0, 0, 0.5), 1.0);
+		gl_MeshVerticesNV[i].gl_Position = ubo.proj * ubo.view * ubo.model * vec4(position, 1.0); 
+		//vec4(position * vec3(1, 1, 0.5) + vec3(0, 0, 0.5), 1.0);
 		color[i] = vec4(normal * 0.5 + vec3(0.5), 1.0);
 	}
 
