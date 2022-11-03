@@ -1,12 +1,12 @@
 #version 450
 
+#define VertexPulling true // Not FixedVertexFunction
+
 layout(set=0, binding=0) uniform UniformBufferObject {
     mat4 model;
     mat4 view;
     mat4 proj;
 } ubo;
-
-#define VertexPulling 1
 
 #if (VertexPulling)
 

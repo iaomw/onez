@@ -1,9 +1,8 @@
 #include "BuilderSPIRV.h"
 
-#include <cstring>
-#include <glslang/Include/glslang_c_shader_types.h>
 #include <glslang/StandAlone/ResourceLimits.cpp>
 
+#include <cstring>
 #include <cassert>
 #include <cstdint>
 #include <iostream>
@@ -196,8 +195,29 @@ size_t compileShaderData(glslang_stage_t stage, const char* shaderSource, _Shade
 
 size_t compileShaderFile(const char* file, _Shader& _shader)
 {
+
+	
+
 	if (auto shaderSource = readFileGLSL(file); !shaderSource.empty()) {
-		auto stage = glslangShaderStageFromFileName(file);
+
+		const auto stage = glslangShaderStageFromFileName(file);
+
+		if (stage == GLSLANG_STAGE_VERTEX) {
+
+			auto lineBegin = shaderSource.find("#define VertexPulling", 0);
+			auto lineEnd = shaderSource.find_first_of("\n", lineBegin);;
+
+			if (lineBegin != 0 && lineEnd > lineBegin) {
+				#if VertexPulling
+					auto s = "#define VertexPulling 1";
+				#else 
+					auto s = "#define VertexPulling 0";
+				#endif
+
+				shaderSource.replace(lineBegin, lineEnd-lineBegin, s);
+			}
+		}
+
 		return compileShaderData(stage, shaderSource.c_str(), _shader);
 	}
 
@@ -300,7 +320,7 @@ static VkShaderStageFlagBits getShaderStage(SpvExecutionModel executionModel)
 		return VK_SHADER_STAGE_FRAGMENT_BIT;
 	case SpvExecutionModelGLCompute:
 		return VK_SHADER_STAGE_COMPUTE_BIT;
-		
+
 	case SpvExecutionModelTaskEXT:
 		return VK_SHADER_STAGE_TASK_BIT_EXT;
 	case SpvExecutionModelMeshEXT:

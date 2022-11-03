@@ -1,7 +1,7 @@
-// #pragma once 
+#pragma once 
 
-#ifndef ONEZH
-#define ONEZH
+// #ifndef ONEZH
+// #define ONEZH
 
 // #include <vulkan/vulkan.h>
 // #include <vulkan/vulkan_core.h>
@@ -12,7 +12,7 @@
 	do                                                                 \
 	{                                                                  \
 		VkResult err = x;                                              \
-		if (err != VK_SUCCESS)                                         \
+		if (err != VK_SUCCESS && err != VK_NOT_READY)                                         \
 		{                                                              \
 			std::cout <<"Detected Vulkan error: " << err << std::endl; \
 			abort();                                                   \
@@ -22,4 +22,6 @@
 
 #define ARRAYSIZE(array) ( sizeof(array)/sizeof(array[0]) )
 
-#endif
+#define VertexPulling 1
+
+// #endif

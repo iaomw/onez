@@ -19,8 +19,8 @@
 // #   error "Platform not supported by this example."
 // #endif
 
-#define VOLK_IMPLEMENTATION
-#include <volk.h>
+// #define VOLK_IMPLEMENTATION
+#include <volk.c>
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -191,7 +191,7 @@ VkQueryPool createQueryPool(VkDevice device, uint32_t queryCount)
 	VK_CHECK(vkCreateQueryPool(device, &createInfo, 0, &queryPool)); 
  
 	return queryPool; 
-} 
+}
 
 class HeVK {
 public:
@@ -213,7 +213,6 @@ private:
     VkPhysicalDeviceProperties deviceProperties;
     
     VkDevice device;
- 
     VkQueryPool queryPool;
 
     bool PUSH_DESCRIPTOR_SUPPORTED = false;
@@ -231,6 +230,7 @@ private:
                 preparedDeviceExtensions.insert(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
             } 
         },
+        #if VertexPulling
         {   VK_NV_MESH_SHADER_EXTENSION_NAME, [&]() {
                 MESH_SHADERING_SUPPORTED = true;
                 preparedDeviceExtensions.insert(VK_NV_MESH_SHADER_EXTENSION_NAME);
@@ -249,6 +249,7 @@ private:
                 };
             } 
         }
+        #endif
     };
 
     VkQueue graphicsQueue;
@@ -921,9 +922,10 @@ private:
             frameTimeCPU *= 1000;
 
             uint64_t queryResults[2]; 
-		    //VK_CHECK(
-                vkGetQueryPoolResults(device, queryPool, 0, ARRAYSIZE(queryResults), sizeof(queryResults), queryResults, sizeof(queryResults[0]), VK_QUERY_RESULT_64_BIT);
-            //    ); 
+            auto frameIndex = (currentFrame + MAX_FRAMES_IN_FLIGHT-1) % MAX_FRAMES_IN_FLIGHT; 
+
+            auto result = vkGetQueryPoolResults(device, queryPool, frameIndex*2, ARRAYSIZE(queryResults), sizeof(queryResults), queryResults, sizeof(queryResults[0]), VK_QUERY_RESULT_64_BIT);
+		    VK_CHECK(result); 
 
             double frameBeginGPU = double(queryResults[0]) * deviceProperties.limits.timestampPeriod * 1e-6; 
 		    double frameEndGPU = double(queryResults[1]) * deviceProperties.limits.timestampPeriod * 1e-6; 
@@ -988,6 +990,9 @@ private:
         vkDestroyBuffer(device, vertexBuffer, nullptr);
         vkFreeMemory(device, vertexBufferMemory, nullptr);
 
+        vkDestroyBuffer(device, meshletsBuffer, nullptr);
+        vkFreeMemory(device, meshletsBufferMemory, nullptr);
+
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
             vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
@@ -995,6 +1000,7 @@ private:
         }
 
         vkDestroyCommandPool(device, commandPool, nullptr);
+        vkDestroyQueryPool(device, queryPool, 0);
 
         vkDestroyDevice(device, nullptr);
 
@@ -1807,7 +1813,7 @@ private:
         }
 
         vkCmdResetQueryPool(commandBuffer, queryPool, 0, 128);
-        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPool, 0);
+        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPool, imageIndex*2 + 0);
 
         VkRenderPassBeginInfo renderPassInfo{};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -1924,9 +1930,8 @@ private:
             if (MESH_SHADERING_SUPPORTED) {
 
                 meshShaderDraw(commandBuffer);
-                // vkCmdDrawMeshTasksEXT(commandBuffer, defaultMesh.meshlets.size(), 1, 1);
                 // vkCmdDrawMeshTasksNV(commandBuffer, defaultMesh.meshlets.size(), 0);
-                
+                // vkCmdDrawMeshTasksEXT(commandBuffer, defaultMesh.meshlets.size(), 1, 1);      
             } else {
                 // VkBuffer vertexBuffers[] = { vertexBuffer };
                 // vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
@@ -1935,7 +1940,7 @@ private:
             } 
 
         vkCmdEndRenderPass(commandBuffer);
-        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPool, 1);
+        vkCmdWriteTimestamp(commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, queryPool, imageIndex*2 + 1);
 
         if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
             throw std::runtime_error("failed to record command buffer!");
