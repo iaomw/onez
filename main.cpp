@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstddef>
+#include <glm/common.hpp>
 #include <glm/ext/vector_float2_precision.hpp>
 #include <glm/fwd.hpp>
 #include <iterator>
@@ -21,6 +22,7 @@
 
 // #define VOLK_IMPLEMENTATION
 #include <volk.c>
+#include <vulkan/vulkan_core.h>
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -30,6 +32,11 @@
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
+#include <glm/packing.hpp> 
+//#include <glm/detail/type_half.inl>
+#include <glm/detail/type_half.hpp>
+#include <glm/gtc/type_precision.hpp> 
+
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/ext/matrix_transform.hpp>
 
@@ -111,10 +118,10 @@ struct SwapChainSupportDetails {
 };
 
 struct Vertex {
-    alignas(16) glm::vec3 position;
+    glm::vec3 position;
+    glm::u16vec2 uv; 
     alignas(16) glm::vec3 normal;
-    alignas(16) glm::vec2 coord;
-    // glm::mediump_vec2 uv;
+    //alignas(16) glm::vec2 coord;
 
     static VkVertexInputBindingDescription getBindingDescription() {
         VkVertexInputBindingDescription bindingDescription{};
@@ -135,19 +142,20 @@ struct Vertex {
 
         attributeDescriptions[1].binding = 0;
         attributeDescriptions[1].location = 1;
-        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[1].offset = offsetof(Vertex, normal);
+        attributeDescriptions[1].offset = offsetof(Vertex, uv);
+        attributeDescriptions[1].format = VK_FORMAT_R16G16_SFLOAT; 
+        // It will try to generate 32bit float data from the 16bit float data 
 
         attributeDescriptions[2].binding = 0;
         attributeDescriptions[2].location = 2;
-        attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
-        attributeDescriptions[2].offset = offsetof(Vertex, coord);
+        attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[2].offset = offsetof(Vertex, normal);
 
         return attributeDescriptions;
     }
 
     bool operator==(const Vertex& other) const {
-        return position == other.position && normal == other.normal && coord == other.coord;
+        return position == other.position && normal == other.normal && uv == other.uv;
     }
 };
 
@@ -170,7 +178,7 @@ namespace std {
         size_t operator()(Vertex const& vertex) const {
             return ((hash<glm::vec3>()(vertex.position) ^
                    (hash<glm::vec3>()(vertex.normal) << 1)) >> 1) ^
-                   (hash<glm::vec2>()(vertex.coord) << 1);
+                   (hash<glm::u16vec2>()(vertex.uv) << 1);
         }
     };
 }
@@ -218,7 +226,7 @@ private:
     bool PUSH_DESCRIPTOR_SUPPORTED = false;
     bool MESH_SHADERING_SUPPORTED = false;
 
-    std::unordered_set<const char*> preparedDeviceExtensions { deviceExtensions.begin(), deviceExtensions.end() };
+    std::set<const char*> preparedDeviceExtensions { deviceExtensions.begin(), deviceExtensions.end() };
     //= std::unordered_set<std::string>(deviceExtensions.begin(), deviceExtensions.end());
 
     std::function<void(VkCommandBuffer&)> meshShaderDraw;
@@ -231,7 +239,7 @@ private:
             } 
         },
         #if VertexPulling
-        {   VK_NV_MESH_SHADER_EXTENSION_NAME, [&]() {
+        {   VK_NV_MESH_SHADER_EXTENSION_NAME, [&]() { return;
                 MESH_SHADERING_SUPPORTED = true;
                 preparedDeviceExtensions.insert(VK_NV_MESH_SHADER_EXTENSION_NAME);
 
@@ -282,7 +290,7 @@ private:
     std::vector<VkBuffer> uniformBuffers;
     std::vector<VkDeviceMemory> uniformBuffersMemory;
 
-    VkDescriptorPool descriptorPool;
+    VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
     std::vector<VkDescriptorSet> descriptorSets;
     std::vector<VkCommandBuffer> commandBuffers;
 
@@ -368,8 +376,12 @@ private:
         }
 
         createUniformBuffers();
-        createDescriptorPool();
-        createDescriptorSets();
+
+        if (!PUSH_DESCRIPTOR_SUPPORTED) {
+            createDescriptorPool();
+            createDescriptorSets();
+        }
+
         createCommandBuffers();
         createSyncObjects();
     }
@@ -471,6 +483,25 @@ private:
         return VK_SAMPLE_COUNT_1_BIT;
     }
 
+    uint16_t parseFP32toFP16(float fp32) {
+
+        auto dum = glm::floatBitsToUint(fp32);
+        return parseFP32toFP16(dum);
+    }
+
+    uint16_t parseFP32toFP16(uint32_t fltInt32) {
+
+        uint16_t fltInt16;
+
+        fltInt16 = (fltInt32 >> 31) << 5;
+        unsigned short tmp = (fltInt32 >> 23) & 0xff;
+        tmp = (tmp - 0x70) & ((unsigned int)((int)(0x70 - tmp) >> 4) >> 27);
+        fltInt16 = (fltInt16 | tmp) << 10;
+        fltInt16 |= (fltInt32 >> 13) & 0x3ff;
+
+        return fltInt16;
+    }
+
     void loadModel() {
         tinyobj::attrib_t attrib;
         std::vector<tinyobj::shape_t> shapes;
@@ -495,9 +526,13 @@ private:
                 };
 
                 if (attrib.texcoords.size() > 0) {
-                    vertex.coord = {
-                        attrib.texcoords[2 * index.texcoord_index + 0],
-                        1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+
+                    float _u = attrib.texcoords[2 * index.texcoord_index + 0];
+                    float _v = 1.0f - attrib.texcoords[2 * index.texcoord_index + 1];
+
+                    vertex.uv = { 
+                        parseFP32toFP16(_u),
+                        parseFP32toFP16(_v)
                     };
                 }
 
@@ -974,7 +1009,9 @@ private:
             vkFreeMemory(device, uniformBuffersMemory[i], nullptr);
         }
 
-        vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+        if (VK_NULL_HANDLE != descriptorPool) {
+            vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+        }
 
         vkDestroySampler(device, textureSampler, nullptr);
         vkDestroyImageView(device, textureImageView, nullptr);
@@ -1170,6 +1207,10 @@ private:
         deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(tmp.size());
         deviceCreateInfo.ppEnabledExtensionNames = tmp.data();
 
+        for (auto ext : tmp) {
+            std::cout << "Using extension: " << ext << std::endl;
+        }
+
         if (enableValidationLayers) {
             deviceCreateInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
             deviceCreateInfo.ppEnabledLayerNames = validationLayers.data();
@@ -1218,9 +1259,10 @@ private:
             features12.pNext = &featuresMesh;
         }
 
-        if (vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create logical device!");
-        }
+        VK_CHECK (vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device)); 
+        // {
+        //     throw std::runtime_error("failed to create logical device!");
+        // }
 
         vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
         vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
@@ -1450,17 +1492,6 @@ private:
         fragShaderStageInfo.module = fragShader.vkModule;
         fragShaderStageInfo.pName = "main";
         shaderStages.push_back(fragShaderStageInfo);
-        
-        VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-        vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-
-        // auto bindingDescription = Vertex::getBindingDescription();
-        // auto attributeDescriptions = Vertex::getAttributeDescriptions();
-
-        // vertexInputInfo.vertexBindingDescriptionCount = 1;
-        // vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-        // vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-        // vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
         VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
         inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -1540,7 +1571,6 @@ private:
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
         pipelineInfo.stageCount = shaderStages.size();
         pipelineInfo.pStages = shaderStages.data();
-        pipelineInfo.pVertexInputState = &vertexInputInfo;
         pipelineInfo.pInputAssemblyState = &inputAssembly;
         pipelineInfo.pViewportState = &viewportState;
         pipelineInfo.pRasterizationState = &rasterizer;
@@ -1551,8 +1581,22 @@ private:
         pipelineInfo.renderPass = renderPass;
         pipelineInfo.subpass = 0;
         pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
-
         pipelineInfo.pDepthStencilState = &depthStencil;
+
+        VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+        vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
+        #if !VertexPulling         
+            auto bindingDescription = Vertex::getBindingDescription();
+            auto attributeDescriptions = Vertex::getAttributeDescriptions();
+
+            vertexInputInfo.vertexBindingDescriptionCount = 1;
+            vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+            vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+            vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+        #endif
+
+        pipelineInfo.pVertexInputState = &vertexInputInfo;
 
         if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &graphicsPipeline) != VK_SUCCESS) {
             throw std::runtime_error("failed to create graphics pipeline!");
@@ -1618,7 +1662,9 @@ private:
 
         // createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferMemory);
 
-        createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferMemory);
+        auto usageFlags = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+
+        createBuffer(bufferSize, usageFlags, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferMemory);
 
         copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
 
@@ -1658,6 +1704,8 @@ private:
     }
 
     void createDescriptorPool() {
+        if (PUSH_DESCRIPTOR_SUPPORTED) { return; }
+
         std::array<VkDescriptorPoolSize, 3> poolSizes{};
         poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
@@ -1679,7 +1727,6 @@ private:
     }
 
     void createDescriptorSets() {
-
         if (PUSH_DESCRIPTOR_SUPPORTED) { return; }
 
         std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
@@ -1739,6 +1786,39 @@ private:
 
             vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
         }
+    }
+
+    VkBufferMemoryBarrier makeBufferBarrier(VkBuffer buffer, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask)
+    {
+        VkBufferMemoryBarrier result = { VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER };
+
+        result.srcAccessMask = srcAccessMask;
+        result.dstAccessMask = dstAccessMask;
+        result.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        result.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        result.buffer = buffer;
+        result.offset = 0;
+        result.size = VK_WHOLE_SIZE;
+
+        return result;
+    }
+
+    VkImageMemoryBarrier makeImageBarrier(VkImage image, VkAccessFlags srcAccessMask, VkAccessFlags dstAccessMask, VkImageLayout oldLayout, VkImageLayout newLayout)
+    {
+        VkImageMemoryBarrier result = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+
+        result.srcAccessMask = srcAccessMask;
+        result.dstAccessMask = dstAccessMask;
+        result.oldLayout = oldLayout;
+        result.newLayout = newLayout;
+        result.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        result.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        result.image = image;
+        result.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        result.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+        result.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+
+        return result;
     }
 
     void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) {
@@ -1933,8 +2013,11 @@ private:
                 // vkCmdDrawMeshTasksNV(commandBuffer, defaultMesh.meshlets.size(), 0);
                 // vkCmdDrawMeshTasksEXT(commandBuffer, defaultMesh.meshlets.size(), 1, 1);      
             } else {
-                // VkBuffer vertexBuffers[] = { vertexBuffer };
-                // vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+
+                #if !VertexPulling
+                    VkBuffer vertexBuffers[] = { vertexBuffer };
+                    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+                #endif
                 vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
                 vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(defaultMesh.indices.size()), 1, 0, 0, 0);
             } 

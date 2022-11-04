@@ -37,6 +37,9 @@ target_link_libraries(${PROJECT_NAME} Threads::Threads)
 find_package(glslang REQUIRED)
 target_link_libraries(${PROJECT_NAME} glslang glslang::SPIRV)
 
+find_package(glm REQUIRED)
+target_link_libraries(${PROJECT_NAME} glm::glm)
+
 # find_path(STB_INCLUDE_DIRS "stb_c_lexer.h")
 # target_include_directories(${PROJECT_NAME} PRIVATE ${STB_INCLUDE_DIRS})
 
