@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.13 FATAL_ERROR)
 
-set(PROJECT_NAME vktest)
+set(PROJECT_NAME onez)
 project(${PROJECT_NAME} C CXX)
 
 if (NOT CMAKE_BUILD_TYPE)
@@ -20,8 +20,7 @@ if(HAS_CLANGD)
 endif()
 
 file(GLOB sources CONFIGURE_DEPENDS *.h *.c *.cpp)
-# target_sources(vktest PUBLIC main.cpp)
-add_executable(vktest ${sources})
+add_executable(${PROJECT_NAME} ${sources})
 
 find_package(Vulkan REQUIRED)
 target_link_libraries(${PROJECT_NAME} ${Vulkan_LIBRARIES})
@@ -104,21 +103,21 @@ add_custom_target(
     DEPENDS ${SPIRV_BINARY_FILES}
 )
 
-add_custom_command(TARGET vktest POST_BUILD
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     #COMMAND ${CMAKE_COMMAND} -E make_directory "${PROJECT_BINARY_DIR}/textures/"
     COMMAND ${CMAKE_COMMAND} -E create_symlink #copy_directory
         "${CMAKE_SOURCE_DIR}/textures"
         "${CMAKE_BINARY_DIR}/textures"
 )
 
-add_custom_command(TARGET vktest POST_BUILD
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     #COMMAND ${CMAKE_COMMAND} -E make_directory "${PROJECT_BINARY_DIR}/viking_room/"
     COMMAND ${CMAKE_COMMAND} -E create_symlink #copy_directory
         "${CMAKE_SOURCE_DIR}/viking_room"
         "${CMAKE_BINARY_DIR}/viking_room"
 )
 
-add_dependencies(vktest Shaders)
+add_dependencies(${PROJECT_NAME} Shaders)
 
 if(HAS_CLANGD)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
@@ -127,9 +126,3 @@ if(HAS_CLANGD)
         "${CMAKE_SOURCE_DIR}/compile_commands.json"
     )
 endif()
-
-# Set global property (all targets are impacted)
-# set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CMAKE_COMMAND} -E time")
-
-# Set property for my_target only
-set_property(TARGET ${PROJECT_NAME} PROPERTY RULE_LAUNCH_COMPILE "${CMAKE_COMMAND} -E time")

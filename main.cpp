@@ -279,12 +279,12 @@ private:
 
     Mesh defaultMesh;
 
-    VkBuffer vertexBuffer;
+    VkBuffer vertexBuffer {};
     VkDeviceMemory vertexBufferMemory;
-    VkBuffer indexBuffer;
+    VkBuffer indexBuffer {};
     VkDeviceMemory indexBufferMemory;
 
-    VkBuffer meshletsBuffer; 
+    VkBuffer meshletsBuffer {}; 
     VkDeviceMemory meshletsBufferMemory;
 
     std::vector<VkBuffer> uniformBuffers;
@@ -1027,8 +1027,10 @@ private:
         vkDestroyBuffer(device, vertexBuffer, nullptr);
         vkFreeMemory(device, vertexBufferMemory, nullptr);
 
-        vkDestroyBuffer(device, meshletsBuffer, nullptr);
-        vkFreeMemory(device, meshletsBufferMemory, nullptr);
+        if (VK_NULL_HANDLE != meshletsBuffer) {
+            vkDestroyBuffer(device, meshletsBuffer, nullptr);
+            vkFreeMemory(device, meshletsBufferMemory, nullptr);
+        }
 
         for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
@@ -1081,9 +1083,9 @@ private:
 
         VkApplicationInfo appInfo{};
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        appInfo.pApplicationName = "HeVK";
+        appInfo.pApplicationName = "onez";
         appInfo.applicationVersion = VK_MAKE_VERSION(1, 2, 0);
-        appInfo.pEngineName = "No Engine";
+        appInfo.pEngineName = "onze";
         appInfo.engineVersion = VK_MAKE_VERSION(1, 2, 0);
         appInfo.apiVersion = VK_API_VERSION_1_2;
 
