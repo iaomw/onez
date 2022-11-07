@@ -120,7 +120,7 @@ struct SwapChainSupportDetails {
 struct Vertex {
     glm::vec3 position;
     glm::u16vec2 uv; 
-    alignas(16) glm::vec3 normal;
+    alignas(16) glm::u16vec3 normal;
     //alignas(16) glm::vec2 coord;
 
     static VkVertexInputBindingDescription getBindingDescription() {
@@ -148,7 +148,7 @@ struct Vertex {
 
         attributeDescriptions[2].binding = 0;
         attributeDescriptions[2].location = 2;
-        attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attributeDescriptions[2].format = VK_FORMAT_R16G16B16_SFLOAT;
         attributeDescriptions[2].offset = offsetof(Vertex, normal);
 
         return attributeDescriptions;
@@ -161,10 +161,11 @@ struct Vertex {
 
 struct Meshlet {
     uint32_t vertices[64] {};
-    uint8_t indices[126] {}; // max 42 tri
+    uint8_t indices[126 * 3] {}; // max 42 tri
 
     uint8_t vertexCount {};
-    uint8_t indexCount {};
+    //uint8_t indexCount {};
+    uint8_t triangleCount;
 };
 
 struct Mesh {
@@ -239,7 +240,7 @@ private:
             } 
         },
         #if VertexPulling
-        {   VK_NV_MESH_SHADER_EXTENSION_NAME, [&]() { return;
+        {   VK_NV_MESH_SHADER_EXTENSION_NAME, [&]() {
                 MESH_SHADERING_SUPPORTED = true;
                 preparedDeviceExtensions.insert(VK_NV_MESH_SHADER_EXTENSION_NAME);
 
@@ -402,7 +403,7 @@ private:
             uint8_t& bv = meshletVertices[b];
             uint8_t& cv = meshletVertices[c];
 
-            if (meshlet.vertexCount + (av == 0xff) + (bv == 0xff) + (cv == 0xff) > 64 || meshlet.indexCount + 3 > 126)
+            if (meshlet.vertexCount + (av == 0xff) + (bv == 0xff) + (cv == 0xff) > 64 || meshlet.triangleCount > 126)
             {
                 mesh.meshlets.push_back(meshlet);
 
@@ -430,12 +431,13 @@ private:
                 meshlet.vertices[meshlet.vertexCount++] = c;
             }
 
-            meshlet.indices[meshlet.indexCount++] = av;
-            meshlet.indices[meshlet.indexCount++] = bv;
-            meshlet.indices[meshlet.indexCount++] = cv;
+            meshlet.indices[meshlet.triangleCount*3 + 0] = av;
+            meshlet.indices[meshlet.triangleCount*3 + 1] = bv;
+            meshlet.indices[meshlet.triangleCount*3 + 2] = cv;
+            meshlet.triangleCount++;
         }
 
-        if (meshlet.indexCount)
+        if (meshlet.triangleCount)
             mesh.meshlets.push_back(meshlet);
     }
 
@@ -537,10 +539,19 @@ private:
                 }
 
                 if (attrib.normals.size() > 0) {
+
+                    float nx = attrib.normals[3 * index.normal_index + 0];
+                    float ny = attrib.normals[3 * index.normal_index + 1];
+                    float nz = attrib.normals[3 * index.normal_index + 2];
+
+                    if (nx < 0 || ny < 0 || nz < 0) {
+                        std::cout << nx << " " << ny << " " << nz << std::endl;
+                    }
+
                     vertex.normal = {
-                        attrib.normals[3 * index.normal_index + 0], 
-                        attrib.normals[3 * index.normal_index + 1], 
-                        attrib.normals[3 * index.normal_index + 2]
+                        parseFP32toFP16(nx), 
+                        parseFP32toFP16(ny), 
+                        parseFP32toFP16(nz)
                     };
                 }
 

@@ -18,8 +18,7 @@ struct Vertex
 {
     vec3 position;
     f16vec2 coord;
-    vec3 normal;
-    //vec2 coord;
+    f16vec3 normal;
 };
 
 layout(set=0, binding=2) readonly buffer Vertices {
