@@ -1,16 +1,5 @@
 #include "onez.h"
 
-#include <cassert>
-#include <cstddef>
-#include <glm/common.hpp>
-#include <glm/ext/vector_float2_precision.hpp>
-#include <glm/fwd.hpp>
-#include <iterator>
-#include <map>
-#include <string>
-#include <unordered_set>
-
-#include <fast_obj.c>
 #include <meshoptimizer.h>
 
 // #if defined(_WIN32)
@@ -35,13 +24,8 @@
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
-#include <glm/packing.hpp> 
-//#include <glm/detail/type_half.inl>
-#include <glm/detail/type_half.hpp>
-#include <glm/gtc/type_precision.hpp> 
-
-#include <glm/gtc/matrix_transform.hpp>
 #include <glm/ext/matrix_transform.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/hash.hpp>
@@ -63,9 +47,18 @@
 #include <cstdint>
 #include <limits>
 #include <array>
-#include <unordered_map>
-#include <optional>
+
 #include <set>
+#include <unordered_set>
+#include <map>
+#include <unordered_map>
+
+#include <cassert>
+#include <cstddef>
+
+#include <string>
+#include <iterator>
+#include <optional>
 
 #include "BuilderSPIRV.h"
 
@@ -520,8 +513,8 @@ private:
             throw std::runtime_error(warn + err);
         }
 
-        auto minVertex = glm::vec3(FLT_MAX);
-        auto maxVertex = -minVertex;
+        glm::vec3 minVertex = glm::vec3(FLT_MAX);
+        glm::vec3 maxVertex = -minVertex;
 
         std::unordered_map<Vertex, uint32_t> uniqueVertices{};
 
@@ -566,10 +559,10 @@ private:
                     };
                 }
 
-                if (uniqueVertices.count(vertex) == 0) {
-                    uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
+                // if (uniqueVertices.count(vertex) == 0) {
+                //     uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
                     vertices.push_back(vertex);
-                }
+                // }
 
                 indices.push_back(uniqueVertices[vertex]);
             }
@@ -580,6 +573,22 @@ private:
 
         defaultMesh.vertices = vertices;
         defaultMesh.indices = indices;
+
+        auto index_count = indices.size();
+
+        std::vector<uint32_t> remap(index_count);
+	    size_t vertex_count = meshopt_generateVertexRemap(remap.data(), 0, index_count, vertices.data(), index_count, sizeof(Vertex));
+
+        auto& result = defaultMesh;
+
+        result.vertices.resize(vertex_count);
+        result.indices.resize(index_count);
+
+        meshopt_remapVertexBuffer(result.vertices.data(), vertices.data(), index_count, sizeof(Vertex), remap.data());
+        meshopt_remapIndexBuffer(result.indices.data(), 0, index_count, remap.data());
+
+        meshopt_optimizeVertexCache(result.indices.data(), result.indices.data(), index_count, vertex_count);
+        meshopt_optimizeVertexFetch(result.vertices.data(), result.indices.data(), index_count, result.vertices.data(), vertex_count, sizeof(Vertex));
     }
 
     void createDepthResources() {
