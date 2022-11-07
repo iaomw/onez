@@ -7,6 +7,7 @@
 // #include <vulkan/vulkan_core.h>
 
 #include <iostream>
+#include <fast_obj.h>
 
 #define VK_CHECK(x)                                                    \
 	do                                                                 \

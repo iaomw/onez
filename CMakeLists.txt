@@ -74,9 +74,14 @@ include_directories(external)
 # include_directories(external/SPIRV-Reflect)
 # set_property(TARGET SPIRV-Reflect PROPERTY FOLDER "external/SPIRV-Reflect")
 
+add_subdirectory(external/meshoptimizer)
+target_link_libraries(${PROJECT_NAME} meshoptimizer)
+
 # add_subdirectory(external/volk)
 include_directories(external/volk)
 # target_link_libraries(${PROJECT_NAME} volk_headers)
+# include_directories(external/fast_obj)
+target_include_directories(${PROJECT_NAME} PUBLIC external/fast_obj)
 
 #include_directories(external/glm)
 #include_directories(external/gli)

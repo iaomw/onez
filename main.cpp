@@ -10,6 +10,9 @@
 #include <string>
 #include <unordered_set>
 
+#include <fast_obj.c>
+#include <meshoptimizer.h>
+
 // #if defined(_WIN32)
 // #   define VK_USE_PLATFORM_WIN32_KHR
 // #elif defined(__linux__) || defined(__unix__)
@@ -69,8 +72,8 @@
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
-const std::string MODEL_PATH = "viking_room/viking_room.obj";
-            // "/home/iaomw/Public/San_Miguel/san-miguel.obj";
+const std::string MODEL_PATH = //"viking_room/viking_room.obj";
+"/home/iaomw/Public/bunny.obj";
 const std::string TEXTURE_PATH = "viking_room/viking_room.png";
 
 const int MAX_FRAMES_IN_FLIGHT = 3;
@@ -118,9 +121,10 @@ struct SwapChainSupportDetails {
 };
 
 struct Vertex {
-    glm::vec3 position;
-    glm::u16vec2 uv; 
-    alignas(16) glm::u16vec3 normal;
+    glm::vec3 position {};
+    glm::u16vec2 uv {}; 
+    glm::u16vec3 normal {};
+    glm::u16 dummy[5] = {};
     //alignas(16) glm::vec2 coord;
 
     static VkVertexInputBindingDescription getBindingDescription() {
@@ -161,7 +165,7 @@ struct Vertex {
 
 struct Meshlet {
     uint32_t vertices[64] {};
-    uint8_t indices[126 * 3] {}; // max 42 tri
+    uint8_t indices[126*3] {};
 
     uint8_t vertexCount {};
     //uint8_t indexCount {};
@@ -172,6 +176,8 @@ struct Mesh {
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
     std::vector<Meshlet> meshlets;
+    
+    std::array<glm::vec3, 2> bounding;
 };
 
 namespace std {
@@ -514,7 +520,13 @@ private:
             throw std::runtime_error(warn + err);
         }
 
+        auto minVertex = glm::vec3(FLT_MAX);
+        auto maxVertex = -minVertex;
+
         std::unordered_map<Vertex, uint32_t> uniqueVertices{};
+
+        std::vector<Vertex> vertices;
+        std::vector<uint32_t> indices;
 
         float scale = 1.0f;
 
@@ -526,6 +538,9 @@ private:
                     attrib.vertices[3 * index.vertex_index + 1]*scale,
                     attrib.vertices[3 * index.vertex_index + 2]*scale
                 };
+
+                maxVertex = glm::max(maxVertex, vertex.position);
+                minVertex = glm::min(minVertex, vertex.position);
 
                 if (attrib.texcoords.size() > 0) {
 
@@ -544,10 +559,6 @@ private:
                     float ny = attrib.normals[3 * index.normal_index + 1];
                     float nz = attrib.normals[3 * index.normal_index + 2];
 
-                    if (nx < 0 || ny < 0 || nz < 0) {
-                        std::cout << nx << " " << ny << " " << nz << std::endl;
-                    }
-
                     vertex.normal = {
                         parseFP32toFP16(nx), 
                         parseFP32toFP16(ny), 
@@ -556,13 +567,19 @@ private:
                 }
 
                 if (uniqueVertices.count(vertex) == 0) {
-                    uniqueVertices[vertex] = static_cast<uint32_t>(defaultMesh.vertices.size());
-                    defaultMesh.vertices.push_back(vertex);
+                    uniqueVertices[vertex] = static_cast<uint32_t>(vertices.size());
+                    vertices.push_back(vertex);
                 }
 
-                defaultMesh.indices.push_back(uniqueVertices[vertex]);
+                indices.push_back(uniqueVertices[vertex]);
             }
         }
+
+        defaultMesh.bounding[0] = minVertex;
+        defaultMesh.bounding[1] = maxVertex;
+
+        defaultMesh.vertices = vertices;
+        defaultMesh.indices = indices;
     }
 
     void createDepthResources() {
@@ -2071,10 +2088,31 @@ private:
         float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
         UniformBufferObject ubo{};
-        ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        //ubo.model = glm::translate(ubo.model, glm::vec3(0, -1.0, 0));
-        ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-        ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 10.0f);
+
+        glm::vec3 mesh_size = (defaultMesh.bounding[1] - defaultMesh.bounding[0])/2.0f;
+        glm::vec3 mesh_center = (defaultMesh.bounding[1] + defaultMesh.bounding[0])/2.0f;
+
+        uint max_axis = [&]() {
+            uint selected_axis = 0;
+            uint selected_value = mesh_size[0];
+            for (uint i=1; i<3; ++i) {
+                if(mesh_size[i] > selected_value) {
+                    selected_axis = i;
+                    selected_value = mesh_size[i];
+                } // if
+            }
+            return selected_axis;
+        }();
+
+        float max_dim = mesh_size[max_axis];
+
+        ubo.model = glm::translate(glm::mat4(1.0f), -mesh_center);
+        ubo.model = glm::scale(ubo.model, glm::vec3(0.5/max_dim));
+
+        ubo.model = glm::rotate(ubo.model, time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    
+        ubo.view = glm::lookAt(glm::vec3(0.0f, 0.0f, 3.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float) swapChainExtent.height, 0.1f, 100.0f);
         ubo.proj[1][1] *= -1;
 
         void* data;
