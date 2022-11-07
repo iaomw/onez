@@ -1,5 +1,6 @@
 #include "BuilderSPIRV.h"
 
+#include <filesystem>
 #include <glslang/StandAlone/ResourceLimits.cpp>
 
 #include <cstring>
@@ -12,15 +13,18 @@
 
 // #include "spirv_reflect.c"
 
-std::string readFileGLSL(const char* fileName)
+std::string readFileGLSL(const char* filePath)
 {
-	FILE* file = fopen(fileName, "r");
+	FILE* file = fopen(filePath, "r");
 
 	if (!file)
 	{
-		printf("I/O error. Cannot open shader file '%s'\n", fileName);
+		printf("I/O error. Cannot open shader file '%s'\n", filePath);
 		return std::string();
 	}
+
+	auto _filePath = std::filesystem::path(filePath);
+	_filePath = _filePath.remove_filename();
 
 	fseek(file, 0L, SEEK_END);
 	const auto bytesinfile = ftell(file);
@@ -52,8 +56,13 @@ std::string readFileGLSL(const char* fileName)
 			printf("Error while loading shader program: %s\n", code.c_str());
 			return std::string();
 		}
+
 		const std::string name = code.substr(p1 + 1, p2 - p1 - 1);
-		const std::string include = readFileGLSL(name.c_str());
+
+		auto work_path = _filePath;
+		work_path.append(name);
+
+		const std::string include = readFileGLSL(work_path.c_str());
 		code.replace(pos, p2-pos+1, include.c_str());
 	}
 

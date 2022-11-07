@@ -1,8 +1,9 @@
 #version 450
 
-// #extension GL_EXT_shader_16bit_storage: require
-#extension GL_EXT_shader_explicit_arithmetic_types: require
-#extension GL_EXT_shader_explicit_arithmetic_types_float16: require
+#extension GL_GOOGLE_include_directive: require 
+
+#include "mesh.h"
+//#include <mesh.h> 
 
 #define VertexPulling true // Not FixedVertexFunction
 
@@ -13,13 +14,6 @@ layout(set=0, binding=0) uniform UniformBufferObject {
 } ubo;
 
 #if (VertexPulling)
-
-struct Vertex
-{
-    vec3 position;
-    f16vec2 coord;
-    f16vec3 normal;
-};
 
 layout(set=0, binding=2) readonly buffer Vertices {
     Vertex vertices[];

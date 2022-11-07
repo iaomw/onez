@@ -122,7 +122,7 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         "${CMAKE_BINARY_DIR}/viking_room"
 )
 
-add_dependencies(${PROJECT_NAME} Shaders)
+# add_dependencies(${PROJECT_NAME} Shaders)
 
 if(HAS_CLANGD)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD

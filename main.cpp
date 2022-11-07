@@ -2380,8 +2380,8 @@ int main() {
 
     glslang_initialize_process();
 
-    testShaderCompilation("./shaders/shader.frag.spv", "../shaders/shader.frag.spv");
-    testShaderCompilation("./shaders/shader.vert.spv", "../shaders/shader.vert.spv");
+    // testShaderCompilation("./shaders/shader.frag.spv", "../shaders/shader.frag.spv");
+    // testShaderCompilation("./shaders/shader.vert.spv", "../shaders/shader.vert.spv");
 
     try {
         app.run();
