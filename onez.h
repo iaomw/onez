@@ -24,5 +24,6 @@
 #define ARRAYSIZE(array) ( sizeof(array)/sizeof(array[0]) )
 
 #define VertexPulling 1
+#define MeshShading 1
 
 // #endif

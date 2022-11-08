@@ -239,7 +239,7 @@ private:
             } 
         },
         #if VertexPulling
-        {   VK_NV_MESH_SHADER_EXTENSION_NAME, [&]() { return;
+        {   VK_NV_MESH_SHADER_EXTENSION_NAME, [&]() { if (!MeshShading) return;
                 MESH_SHADERING_SUPPORTED = true;
                 preparedDeviceExtensions.insert(VK_NV_MESH_SHADER_EXTENSION_NAME);
 
@@ -248,7 +248,7 @@ private:
                 };
             } 
         },
-        {   VK_EXT_MESH_SHADER_EXTENSION_NAME, [&]() {
+        {   VK_EXT_MESH_SHADER_EXTENSION_NAME, [&]() { if (!MeshShading) return;
                 MESH_SHADERING_SUPPORTED = true;
                 preparedDeviceExtensions.insert(VK_EXT_MESH_SHADER_EXTENSION_NAME);
 
@@ -333,6 +333,8 @@ private:
         app->framebufferResized = true;
     }
 
+    VkDescriptorUpdateTemplate updateTemplate = VK_NULL_HANDLE;
+
     void initVulkan() {
 
         VK_CHECK(volkInitialize());
@@ -348,7 +350,12 @@ private:
         createSwapChain();
         createImageViews();
         createRenderPass();
+
         createDescriptorSetLayout();
+        createPipelinelayout();
+
+        updateTemplate = createUpdateTemplate(device, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout);
+
         createGraphicsPipeline();
 
         queryPool = createQueryPool(device, 128); 
@@ -1490,6 +1497,97 @@ private:
         }
     }
 
+    void createPipelinelayout() {
+
+        VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipelineLayoutInfo.setLayoutCount = 1;
+        pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+            
+        if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
+            throw std::runtime_error("failed to create pipeline layout!");
+        }
+    }
+
+    VkDescriptorUpdateTemplate createUpdateTemplate(VkDevice device, VkPipelineBindPoint bindPoint, VkPipelineLayout layout)
+    {
+        VkDescriptorSetLayout setLayout = descriptorSetLayout; //createSetLayout(device, rtxEnabled);
+
+        std::vector<VkDescriptorUpdateTemplateEntry> entries;
+        entries.reserve(4);
+
+        VkDescriptorUpdateTemplateEntry ele {}; 
+
+        ele.dstBinding = 0;
+        ele.dstArrayElement = 0;
+        ele.descriptorCount = 1;
+        ele.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        ele.offset = sizeof(DescriptorInfo) * 0;
+        ele.stride = sizeof(DescriptorInfo);
+        entries.push_back(ele);
+
+        ele = {};
+
+        ele.dstBinding = 1;
+        ele.dstArrayElement = 0;
+        ele.descriptorCount = 1;
+        ele.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        ele.offset = sizeof(DescriptorInfo) * 1;
+        ele.stride = sizeof(DescriptorInfo);
+        entries.push_back(ele);
+
+        if (MESH_SHADERING_SUPPORTED)
+        {
+            ele = {};
+            ele.dstBinding = 2;
+            ele.dstArrayElement = 0;
+            ele.descriptorCount = 1;
+            ele.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            ele.offset = sizeof(DescriptorInfo) * 2;
+            ele.stride = sizeof(DescriptorInfo);
+            entries.push_back(ele);
+
+            ele = {};
+            ele.dstBinding = 3;
+            ele.dstArrayElement = 0;
+            ele.descriptorCount = 1;
+            ele.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            ele.offset = sizeof(DescriptorInfo) * 3;
+            ele.stride = sizeof(DescriptorInfo);
+            entries.push_back(ele);
+        }
+        else
+        {
+            ele = {};
+            ele.dstBinding = 2;
+            ele.dstArrayElement = 0;
+            ele.descriptorCount = 1;
+            ele.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            ele.offset = sizeof(DescriptorInfo) * 2;
+            ele.stride = sizeof(DescriptorInfo);
+            entries.push_back(ele);
+        }
+
+        VkDescriptorUpdateTemplateCreateInfo createInfo = { VK_STRUCTURE_TYPE_DESCRIPTOR_UPDATE_TEMPLATE_CREATE_INFO };
+
+        createInfo.descriptorUpdateEntryCount = uint32_t(entries.size());
+        createInfo.pDescriptorUpdateEntries = entries.data();
+
+        createInfo.templateType = VK_DESCRIPTOR_UPDATE_TEMPLATE_TYPE_PUSH_DESCRIPTORS_KHR;
+        createInfo.descriptorSetLayout = setLayout;
+        createInfo.pipelineBindPoint = bindPoint;
+        createInfo.pipelineLayout = layout;
+
+        VkDescriptorUpdateTemplate updateTemplate = 0;
+        VK_CHECK(vkCreateDescriptorUpdateTemplate(device, &createInfo, 0, &updateTemplate));
+
+        // TODO: is this safe?
+        //vkDestroyDescriptorSetLayout(device, setLayout, 0);
+
+        return updateTemplate;
+    }
+
+
     void createGraphicsPipeline() {
 
         _Shader vertShader {}, fragShader {};
@@ -1596,15 +1694,6 @@ private:
         dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
         dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
         dynamicState.pDynamicStates = dynamicStates.data();
-
-        VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-        pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipelineLayoutInfo.setLayoutCount = 1;
-        pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
-            
-        if (vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
-            throw std::runtime_error("failed to create pipeline layout!");
-        }
 
         VkGraphicsPipelineCreateInfo pipelineInfo{};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -2038,13 +2127,17 @@ private:
                             descriptorWrites.back().pBufferInfo = &_meshletsBufferInfo;
                         }
 
-                    vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, descriptorWrites.size(), descriptorWrites.data());
+                    //vkCmdPushDescriptorSetKHR(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, descriptorWrites.size(), descriptorWrites.data());
+
+                    auto imginfo = DescriptorInfo(textureSampler, textureImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+                    DescriptorInfo _descriptors[] = { uniformBuffers[imageIndex], imginfo, vertexBuffer, meshletsBuffer};
+                    vkCmdPushDescriptorSetWithTemplateKHR(commandBuffer, updateTemplate, pipelineLayout, 0, _descriptors);
 
                 } else {
 
                     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
                 }
-
 
             if (MESH_SHADERING_SUPPORTED) {
 
