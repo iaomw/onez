@@ -7,7 +7,7 @@
 // #include <vulkan/vulkan_core.h>
 
 #include <iostream>
-#include <fast_obj.h>
+#include "../shaders/mesh.glsl"
 
 #define VK_CHECK(x)                                                    \
 	do                                                                 \

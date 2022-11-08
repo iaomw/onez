@@ -116,8 +116,8 @@ struct SwapChainSupportDetails {
 struct Vertex {
     glm::vec3 position {};
     glm::u16vec2 uv {}; 
-    glm::u16vec3 normal {};
-    glm::u16 dummy[5] = {};
+    alignas(16) glm::u16vec3 normal {};
+    //glm::u16 dummy[5] = {};
     //alignas(16) glm::vec2 coord;
 
     static VkVertexInputBindingDescription getBindingDescription() {
@@ -239,7 +239,7 @@ private:
             } 
         },
         #if VertexPulling
-        {   VK_NV_MESH_SHADER_EXTENSION_NAME, [&]() {
+        {   VK_NV_MESH_SHADER_EXTENSION_NAME, [&]() { return;
                 MESH_SHADERING_SUPPORTED = true;
                 preparedDeviceExtensions.insert(VK_NV_MESH_SHADER_EXTENSION_NAME);
 

@@ -1,3 +1,4 @@
+#ifndef __cplusplus
 
 #extension GL_EXT_shader_8bit_storage: require
 #extension GL_EXT_shader_16bit_storage: require
@@ -15,3 +16,9 @@ struct Vertex
     f16vec2 coord;
     f16vec3 normal;
 };
+
+#else
+
+
+
+#endif

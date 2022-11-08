@@ -1,12 +1,7 @@
 #version 450
-
-#extension GL_EXT_shader_explicit_arithmetic_types_int32: require
-#extension GL_EXT_shader_explicit_arithmetic_types_int16: require
-#extension GL_EXT_shader_explicit_arithmetic_types_int8: require
-
-#extension GL_EXT_shader_16bit_storage: require
-#extension GL_EXT_shader_8bit_storage: require
 #extension GL_NV_mesh_shader: require
+
+#include <mesh.h>
 
 #define DEBUG 1
 
@@ -20,13 +15,6 @@ layout(set=0, binding=0) uniform UniformBufferObject {
     mat4 view;
     mat4 proj;
 } ubo;
-
-struct Vertex
-{
-	vec3 position;
-	f16vec2 coord;
-	f16vec3 normal;
-};
 
 layout(binding = 2) readonly buffer Vertices
 {

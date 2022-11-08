@@ -204,9 +204,6 @@ size_t compileShaderData(glslang_stage_t stage, const char* shaderSource, _Shade
 
 size_t compileShaderFile(const char* file, _Shader& _shader)
 {
-
-	
-
 	if (auto shaderSource = readFileGLSL(file); !shaderSource.empty()) {
 
 		const auto stage = glslangShaderStageFromFileName(file);
