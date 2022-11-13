@@ -1006,14 +1006,21 @@ private:
             auto result = vkGetQueryPoolResults(device, queryPool, frameIndex*2, ARRAYSIZE(queryResults), sizeof(queryResults), queryResults, sizeof(queryResults[0]), VK_QUERY_RESULT_64_BIT);
 		    VK_CHECK(result); 
 
+            if (result != VK_SUCCESS) {
+                continue;
+            }
+
             double frameBeginGPU = double(queryResults[0]) * deviceProperties.limits.timestampPeriod * 1e-6; 
-		    double frameEndGPU = double(queryResults[1]) * deviceProperties.limits.timestampPeriod * 1e-6; 
+            double frameEndGPU = double(queryResults[1]) * deviceProperties.limits.timestampPeriod * 1e-6; 
 
             auto frameTimeGPU = frameEndGPU - frameBeginGPU;
 
+            frameAvgCPU = frameAvgCPU * 0.95 + frameTimeCPU * 0.05;
+            frameAvgGPU = frameAvgGPU * 0.95 + frameTimeGPU * 0.05;
+
             char buff[128];
-            snprintf(buff, sizeof(buff), "cputime %.2f ms, gputime %.2f ms, fps %.2f, %lu triangles", 
-                                        frameTimeCPU, frameTimeGPU, 1000/frameTimeCPU, defaultMesh.indices.size()/3);
+            snprintf(buff, sizeof(buff), "avg cputime %.2f ms, avg gputime %.2f ms, fps %.2f, %lu triangles", 
+                                    frameAvgCPU, frameAvgGPU, 1000/frameTimeCPU, defaultMesh.indices.size()/3);
 
             glfwSetWindowTitle(window, buff);
         }
