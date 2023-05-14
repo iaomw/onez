@@ -1,5 +1,9 @@
 #include "onez.h"
 
+#ifndef uint
+typedef unsigned int uint;
+#endif
+
 #include <meshoptimizer.h>
 
 // #if defined(_WIN32)
@@ -66,7 +70,7 @@ const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
 const std::string MODEL_PATH = //"viking_room/viking_room.obj";
-"/home/iaomw/Public/bunny.obj";
+                            "assets/bunny.obj";
 const std::string TEXTURE_PATH = "viking_room/viking_room.png";
 
 const int MAX_FRAMES_IN_FLIGHT = 3;
@@ -2296,7 +2300,7 @@ private:
 
     VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) {
         for (const auto& availableFormat : availableFormats) {
-            if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+            if (availableFormat.format == VK_FORMAT_R8G8B8A8_SRGB && availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
                 return availableFormat;
             }
         }

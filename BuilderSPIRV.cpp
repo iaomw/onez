@@ -1,12 +1,10 @@
 #include "BuilderSPIRV.h"
 
-#include <filesystem>
-#include <glslang/StandAlone/ResourceLimits.cpp>
-
 #include <cstring>
 #include <cassert>
 #include <cstdint>
 #include <iostream>
+#include <filesystem>
 
 #include <vector>
 #include <algorithm>
@@ -62,7 +60,7 @@ std::string readFileGLSL(const char* filePath)
 		auto work_path = _filePath;
 		work_path.append(name);
 
-		const std::string include = readFileGLSL(work_path.c_str());
+		const std::string include = readFileGLSL(work_path.string().c_str());
 		code.replace(pos, p2-pos+1, include.c_str());
 	}
 
@@ -84,21 +82,21 @@ static const std::map<std::string, glslang_stage_t> STAGE_MAP {
 	{".tesc", GLSLANG_STAGE_TESSCONTROL   },
 	{".tese", GLSLANG_STAGE_TESSEVALUATION},
 
-	{".task", GLSLANG_STAGE_TASK_NV},
-	{".mesh", GLSLANG_STAGE_MESH_NV}
+	{".task", GLSLANG_STAGE_TASK},
+	{".mesh", GLSLANG_STAGE_MESH}
 };
 
 glslang_stage_t glslangShaderStageFromFileName(const char* filePath)
 {
 	auto fileName = std::filesystem::path(filePath).filename();
-	auto extension = fileName.extension();
+	auto extension = fileName.extension().string();
 
 	static const auto extensionGLSL = std::string(".glsl");
 
-	auto isGLSL = extensionGLSL == extension.string();
+	auto isGLSL = (extensionGLSL == extension);
 
 	if (isGLSL) {
-		extension = fileName.stem().extension();
+		extension = fileName.stem().extension().string();
 	}
 
 	if (STAGE_MAP.count(extension)) {
@@ -135,6 +133,24 @@ void printShaderSource(const char* text)
 
 size_t compileShaderData(glslang_stage_t stage, const char* shaderSource, _Shader& _shader)
 {
+#if defined(_MSC_VER)
+	const glslang_input_t input =
+	{
+		GLSLANG_SOURCE_GLSL,
+		stage,
+		GLSLANG_CLIENT_VULKAN,
+		GLSLANG_TARGET_VULKAN_1_2,
+		GLSLANG_TARGET_SPV,
+		GLSLANG_TARGET_SPV_1_3,
+		shaderSource,
+		100,
+		GLSLANG_NO_PROFILE,
+		false,
+		false,
+		GLSLANG_MSG_DEFAULT_BIT,
+		(const glslang_resource_t*)GetDefaultResources()
+	};
+#else 
 	const glslang_input_t input =
 	{
 		.language = GLSLANG_SOURCE_GLSL,
@@ -149,8 +165,9 @@ size_t compileShaderData(glslang_stage_t stage, const char* shaderSource, _Shade
 		.force_default_version_and_profile = false,
 		.forward_compatible = false,
 		.messages = GLSLANG_MSG_DEFAULT_BIT,
-		.resource = (const glslang_resource_t*)&glslang::DefaultTBuiltInResource,
+		.resource = (const glslang_resource_t*)GetDefaultResources()
 	};
+#endif
 
 	glslang_shader_t* shader = glslang_shader_create(&input);
 

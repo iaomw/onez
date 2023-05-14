@@ -22,25 +22,35 @@ endif()
 file(GLOB sources CONFIGURE_DEPENDS *.h *.c *.cpp)
 add_executable(${PROJECT_NAME} ${sources})
 
-find_package(Vulkan REQUIRED)
-target_link_libraries(${PROJECT_NAME} ${Vulkan_LIBRARIES})
-target_include_directories(${PROJECT_NAME} PUBLIC ${Vulkan_INCLUDE_DIR})
-
 find_package(glfw3 REQUIRED)
 target_link_libraries(${PROJECT_NAME} glfw)
-target_include_directories(${PROJECT_NAME} PUBLIC ${GLFW_INCLUDE_DIRS})
+target_include_directories(${PROJECT_NAME} PRIVATE ${GLFW_INCLUDE_DIRS})
+
+find_package(Vulkan REQUIRED)
+target_link_libraries(${PROJECT_NAME} ${Vulkan_LIBRARIES})
+target_include_directories(${PROJECT_NAME} PRIVATE ${Vulkan_INCLUDE_DIR})
 
 find_package(Threads REQUIRED)
 target_link_libraries(${PROJECT_NAME} Threads::Threads)
 
-find_package(glslang REQUIRED)
-target_link_libraries(${PROJECT_NAME} glslang glslang::SPIRV)
+find_package(glslang CONFIG REQUIRED)
+# target_link_libraries(${PROJECT_NAME} glslang glslang::SPIRV)
+target_link_libraries(${PROJECT_NAME} glslang::glslang 
+                                      glslang::OSDependent
+                                      glslang::MachineIndependent 
+                                      glslang::glslang-default-resource-limits 
+                                      glslang::GenericCodeGen 
+                                      glslang::OGLCompiler 
+                                      glslang::SPVRemapper 
+                                      glslang::SPIRV 
+                                      glslang::HLSL
+                                      )
 
 find_package(glm REQUIRED)
 target_link_libraries(${PROJECT_NAME} glm::glm)
 
 # find_path(STB_INCLUDE_DIRS "stb_c_lexer.h")
-# target_include_directories(${PROJECT_NAME} PRIVATE ${STB_INCLUDE_DIRS})
+# target_include_directories(${PROJECT_NAME} ${STB_INCLUDE_DIRS})
 
 # find_package(tinyobjloader CONFIG REQUIRED)
 # target_link_libraries(${PROJECT_NAME} tinyobjloader::tinyobjloader)
@@ -57,16 +67,6 @@ target_link_libraries(${PROJECT_NAME} glm::glm)
 #   GIT_PROGRESS TRUE
 # )
 # FetchContent_MakeAvailable(spirv-reflect)
-
-# FetchContent_Declare(
-#   glslang
-#   GIT_REPOSITORY https://github.com/KhronosGroup/glslang.git
-#   GIT_TAG        11.12.0
-#   SOURCE_DIR     ${CMAKE_CURRENT_SOURCE_DIR}/external/glslang
-#   GIT_SHALLOW TRUE
-#   GIT_PROGRESS TRUE
-# )
-# FetchContent_MakeAvailable(glslang)
 
 include_directories(external)
 
@@ -107,6 +107,7 @@ add_custom_target(
     Shaders 
     DEPENDS ${SPIRV_BINARY_FILES}
 )
+# add_dependencies(${PROJECT_NAME} Shaders)
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     #COMMAND ${CMAKE_COMMAND} -E make_directory "${PROJECT_BINARY_DIR}/textures/"
@@ -122,12 +123,16 @@ add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         "${CMAKE_BINARY_DIR}/viking_room"
 )
 
-# add_dependencies(${PROJECT_NAME} Shaders)
-
-if(HAS_CLANGD)
-    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E create_symlink #copy_directory
-        "${CMAKE_BINARY_DIR}/compile_commands.json"
-        "${CMAKE_SOURCE_DIR}/compile_commands.json"
-    )
-endif()
+        "${CMAKE_SOURCE_DIR}/assets"
+        "${CMAKE_BINARY_DIR}/assets"
+)
+
+# if(HAS_CLANGD)
+#     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+#     COMMAND ${CMAKE_COMMAND} -E create_symlink #copy_directory
+#         "${CMAKE_BINARY_DIR}/compile_commands.json"
+#         "${CMAKE_SOURCE_DIR}/compile_commands.json"
+#     )
+# endif()
