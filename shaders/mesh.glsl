@@ -19,6 +19,6 @@ struct Vertex
 
 #else
 
-
+// C++
 
 #endif

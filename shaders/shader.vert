@@ -2,7 +2,7 @@
 
 #extension GL_GOOGLE_include_directive: require
 
-#include <mesh.glsl>
+#include "mesh.glsl"
 
 #define VertexPulling true // Not FixedVertexFunction
 

@@ -7,7 +7,7 @@
 // #include <vulkan/vulkan_core.h>
 
 #include <iostream>
-#include "../shaders/mesh.glsl"
+#include "shaders/mesh.glsl"
 
 #define VK_CHECK(x)                                                    \
 	do                                                                 \
@@ -24,6 +24,6 @@
 #define ARRAYSIZE(array) ( sizeof(array)/sizeof(array[0]) )
 
 #define VertexPulling 1
-#define MeshShading 1
+#define MeshShading 0
 
 // #endif

@@ -2,7 +2,7 @@
 #extension GL_NV_mesh_shader: require
 #extension GL_GOOGLE_include_directive: require
 
-#include <mesh.glsl>
+#include "mesh.glsl"
 
 #define DEBUG 1
 

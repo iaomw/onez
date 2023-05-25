@@ -44,28 +44,45 @@ std::string readFileGLSL(const char* filePath)
 	}
 
 	std::string code(buffer);
+	
+	size_t offset = 0;
+	std::string result;
 
-	while (code.find("#include ") != code.npos)
-	{
-		const auto pos = code.find("#include ");
-		const auto p1 = code.find('<', pos);
-		const auto p2 = code.find('>', pos);
-		if (p1 == code.npos || p2 == code.npos || p2 <= p1)
+	while (code.find("#include", offset) != code.npos)
+	{		
+		const auto pos = code.find("#include", offset);
+		const auto end = code.find("\n", pos);
+
+		result += code.substr(offset, pos-offset);
+		offset = end + 1;
+
+		const auto macro_line = code.substr(pos, end-pos+1);
+
+		auto p1 = macro_line.find('<', 0);
+		auto p2 = macro_line.find('>', 0);
+
+		if (p1 == macro_line.npos || p2 == macro_line.npos || p2 <= p1)
 		{
-			printf("Error while loading shader program: %s\n", code.c_str());
+			p1 = macro_line.find('\"', 0);
+			p2 = macro_line.find('\"', p1+1);
+		}
+
+		if (p1 == macro_line.npos || p2 == macro_line.npos || p2 <= p1)
+		{
+			printf("Error while loading shader program:\n%s\n", code.c_str());
 			return std::string();
 		}
 
-		const std::string name = code.substr(p1 + 1, p2 - p1 - 1);
+		const std::string name = macro_line.substr(p1 + 1, p2 - p1 - 1);
 
 		auto work_path = _filePath;
 		work_path.append(name);
 
-		const std::string include = readFileGLSL(work_path.string().c_str());
-		code.replace(pos, p2-pos+1, include.c_str());
+		result += readFileGLSL(work_path.string().c_str());
 	}
 
-	return code;
+	result += code.substr(offset);
+	return result;
 }
 
 int endsWith(const char* s, const char* part)
