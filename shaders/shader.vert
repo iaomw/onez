@@ -1,5 +1,8 @@
 #version 450
-#include <mesh.h>
+
+#extension GL_GOOGLE_include_directive: require
+
+#include <mesh.glsl>
 
 #define VertexPulling true // Not FixedVertexFunction
 

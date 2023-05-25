@@ -6,6 +6,7 @@
 #include <iostream>
 #include <filesystem>
 
+#include <stdio.h>
 #include <vector>
 #include <algorithm>
 
@@ -564,6 +565,11 @@ bool loadinShader(_Shader& shader, VkDevice device, const char* path) {
 	parseShader(shader, shader.SPIRV.data(), shader.SPIRV.size());
 
 	return true;
+}
+
+bool loadinShader(_Shader& shader, VkDevice device, const std::filesystem::path root_path, const char* path) {
+	auto file_path = root_path / path;
+	return loadinShader(shader, device, file_path.string().c_str());
 }
 
 static VkSpecializationInfo fillSpecializationInfo(std::vector<VkSpecializationMapEntry>& entries, const _Constants& constants)

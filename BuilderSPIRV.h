@@ -93,11 +93,12 @@ struct DescriptorInfo
 	}
 };
 
-#pragma mark - SPIRV reflect
 
 int SpirvReflectExample(const void* spirv_code, size_t spirv_nbytes);
 
 bool loadinShader(_Shader& shader, VkDevice device, const char* path);
+bool loadinShader(_Shader& shader, VkDevice device, const std::filesystem::path root_path, const char* path);
+
 void parseShader(_Shader& shader, const uint32_t* code, uint32_t codeSize);
 
 using _Shaders = std::initializer_list<const _Shader*>;
@@ -106,7 +107,6 @@ using _Constants = std::initializer_list<int>;
 VkPipeline createGraphicsPipelineVK13(VkDevice device, VkPipelineCache pipelineCache, const VkPipelineRenderingCreateInfo& renderingInfo, _Shaders shaders, VkPipelineLayout layout, _Constants constants = {});
 VkPipeline createComputePipeline(VkDevice device, VkPipelineCache pipelineCache, const _Shader& shader, VkPipelineLayout layout, _Constants constants = {});
 
-#pragma mark - SPIRV compile
 
 std::string readFileGLSL(const char* fileName);
 bool saveFileSPIRV(const char* filename, unsigned int* code, size_t size);

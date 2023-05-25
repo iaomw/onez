@@ -63,14 +63,14 @@ typedef unsigned int uint;
 #include <string>
 #include <iterator>
 #include <optional>
+#include <filesystem>
 
 #include "BuilderSPIRV.h"
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
-const std::string MODEL_PATH = //"viking_room/viking_room.obj";
-                            "assets/bunny.obj";
+const std::string MODEL_PATH = "viking_room/viking_room.obj";
 const std::string TEXTURE_PATH = "viking_room/viking_room.png";
 
 const int MAX_FRAMES_IN_FLIGHT = 3;
@@ -341,6 +341,9 @@ private:
 
     void initVulkan() {
 
+        auto file_path = std::filesystem::path(__FILE__);
+        auto root_path = file_path.parent_path();
+
         VK_CHECK(volkInitialize());
 
         createInstance();
@@ -360,7 +363,7 @@ private:
 
         updateTemplate = createUpdateTemplate(device, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout);
 
-        createGraphicsPipeline();
+        createGraphicsPipeline(root_path);
 
         queryPool = createQueryPool(device, 128); 
         assert(queryPool);
@@ -371,11 +374,11 @@ private:
         createDepthResources();
 
         createFramebuffers();
-        createTextureImage();
+        createTextureImage(root_path);
         createTextureImageView();
         createTextureSampler();
 
-        loadModel();
+        loadModel(root_path);
 
         createVertexBuffer();
 
@@ -514,13 +517,15 @@ private:
         return fltInt16;
     }
 
-    void loadModel() {
+    void loadModel(const std::filesystem::path& root_path) {
         tinyobj::attrib_t attrib;
         std::vector<tinyobj::shape_t> shapes;
         std::vector<tinyobj::material_t> materials;
         std::string warn, err;
 
-        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str())) {
+        auto model_path = root_path / "assets/bunny.obj";
+ 
+        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, model_path.string().c_str())) {
             throw std::runtime_error(warn + err);
         }
 
@@ -551,9 +556,14 @@ private:
                     float _u = attrib.texcoords[2 * index.texcoord_index + 0];
                     float _v = 1.0f - attrib.texcoords[2 * index.texcoord_index + 1];
 
+                    // vertex.uv = { 
+                    //     parseFP32toFP16(_u),
+                    //     parseFP32toFP16(_v)
+                    // };
+
                     vertex.uv = { 
-                        parseFP32toFP16(_u),
-                        parseFP32toFP16(_v)
+                        meshopt_quantizeHalf(_u),
+                        meshopt_quantizeHalf(_v)
                     };
                 }
 
@@ -563,10 +573,16 @@ private:
                     float ny = attrib.normals[3 * index.normal_index + 1];
                     float nz = attrib.normals[3 * index.normal_index + 2];
 
+                    // vertex.normal = {
+                    //     parseFP32toFP16(nx), 
+                    //     parseFP32toFP16(ny), 
+                    //     parseFP32toFP16(nz)
+                    // };
+
                     vertex.normal = {
-                        parseFP32toFP16(nx), 
-                        parseFP32toFP16(ny), 
-                        parseFP32toFP16(nz)
+                        meshopt_quantizeHalf(nx),
+                        meshopt_quantizeHalf(ny),
+                        meshopt_quantizeHalf(nz)
                     };
                 }
 
@@ -738,9 +754,12 @@ private:
         vkBindImageMemory(device, image, imageMemory, 0);
     }
 
-    void createTextureImage() {
+    void createTextureImage(const std::filesystem::path& root_path) {
         int texWidth, texHeight, texChannels;
-        stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+
+        auto file_path = root_path / TEXTURE_PATH;
+
+        stbi_uc* pixels = stbi_load(file_path.string().c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
         VkDeviceSize imageSize = texWidth * texHeight * 4;
 
         mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
@@ -1023,7 +1042,7 @@ private:
             frameAvgGPU = frameAvgGPU * 0.95 + frameTimeGPU * 0.05;
 
             char buff[128];
-            snprintf(buff, sizeof(buff), "avg cputime %.2f ms, avg gputime %.2f ms, fps %.2f, %lu triangles", 
+            snprintf(buff, sizeof(buff), "avg cputime %.2f ms, avg gputime %.2f ms, fps %.2f, %llu triangles", 
                                     frameAvgCPU, frameAvgGPU, 1000/frameTimeCPU, defaultMesh.indices.size()/3);
 
             glfwSetWindowTitle(window, buff);
@@ -1599,7 +1618,7 @@ private:
     }
 
 
-    void createGraphicsPipeline() {
+    void createGraphicsPipeline(const std::filesystem::path& root_path) {
 
         _Shader vertShader {}, fragShader {};
 
@@ -1608,11 +1627,11 @@ private:
 
         if (MESH_SHADERING_SUPPORTED) {
             //loadinShader(taskShader, device, "../shaders/shader.task.glsl");
-            loadinShader(meshShader, device, "../shaders/test.mesh.glsl");
-            loadinShader(fragShader, device, "../shaders/test.frag.glsl");
+            loadinShader(meshShader, device, root_path, "shaders/test.mesh.glsl");
+            loadinShader(fragShader, device, root_path, "shaders/test.frag.glsl");
         } else {
-            loadinShader(vertShader, device, "../shaders/shader.vert");
-            loadinShader(fragShader, device, "../shaders/shader.frag");
+            loadinShader(vertShader, device, root_path, "shaders/shader.vert");
+            loadinShader(fragShader, device, root_path, "shaders/shader.frag");
         }
 
         std::vector<VkPipelineShaderStageCreateInfo> shaderStages{}; //= {vertShaderStageInfo, fragShaderStageInfo};
@@ -1708,7 +1727,7 @@ private:
 
         VkGraphicsPipelineCreateInfo pipelineInfo{};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        pipelineInfo.stageCount = shaderStages.size();
+        pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
         pipelineInfo.pStages = shaderStages.data();
         pipelineInfo.pInputAssemblyState = &inputAssembly;
         pipelineInfo.pViewportState = &viewportState;
@@ -2077,7 +2096,7 @@ private:
                     uniformBufferInfo.offset = 0;
                     uniformBufferInfo.range = sizeof(UniformBufferObject);
 
-                    uint32_t idx = descriptorWrites.size();
+                    uint32_t idx = static_cast<uint32_t>(descriptorWrites.size());
                     descriptorWrites.push_back(VkWriteDescriptorSet());
 
                     descriptorWrites.back().sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -2207,7 +2226,7 @@ private:
 
         uint max_axis = [&]() {
             uint selected_axis = 0;
-            uint selected_value = mesh_size[0];
+            float selected_value = mesh_size[0];
             for (uint i=1; i<3; ++i) {
                 if(mesh_size[i] > selected_value) {
                     selected_axis = i;
@@ -2220,7 +2239,7 @@ private:
         float max_dim = mesh_size[max_axis];
 
         ubo.model = glm::translate(glm::mat4(1.0f), -mesh_center);
-        ubo.model = glm::scale(ubo.model, glm::vec3(0.5/max_dim));
+        ubo.model = glm::scale(ubo.model, glm::vec3(0.5f/max_dim));
 
         ubo.model = glm::rotate(ubo.model, time * glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     

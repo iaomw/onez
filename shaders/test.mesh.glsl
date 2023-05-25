@@ -1,7 +1,8 @@
 #version 450
 #extension GL_NV_mesh_shader: require
+#extension GL_GOOGLE_include_directive: require
 
-#include <mesh.h>
+#include <mesh.glsl>
 
 #define DEBUG 1
 

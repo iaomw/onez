@@ -19,6 +19,10 @@ if(HAS_CLANGD)
   set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 endif()
 
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
 file(GLOB sources CONFIGURE_DEPENDS *.h *.c *.cpp)
 add_executable(${PROJECT_NAME} ${sources})
 
@@ -86,48 +90,6 @@ target_include_directories(${PROJECT_NAME} PUBLIC external/fast_obj)
 #include_directories(external/glm)
 #include_directories(external/gli)
 #include_directories(external/imgui)
-
-file(GLOB_RECURSE GLSL_SOURCE_FILES
-    "shaders/*.frag"
-    "shaders/*.vert"
-    )
-
-foreach(GLSL ${GLSL_SOURCE_FILES})
-    get_filename_component(FILE_NAME ${GLSL} NAME)
-    set(SPIRV "${PROJECT_BINARY_DIR}/shaders/${FILE_NAME}.spv")
-    add_custom_command(
-        OUTPUT ${SPIRV}
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${PROJECT_BINARY_DIR}/shaders/"
-        COMMAND glslc ${GLSL} -o ${SPIRV}
-        DEPENDS ${GLSL})
-    list(APPEND SPIRV_BINARY_FILES ${SPIRV})
-endforeach(GLSL)
-
-add_custom_target(
-    Shaders 
-    DEPENDS ${SPIRV_BINARY_FILES}
-)
-# add_dependencies(${PROJECT_NAME} Shaders)
-
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    #COMMAND ${CMAKE_COMMAND} -E make_directory "${PROJECT_BINARY_DIR}/textures/"
-    COMMAND ${CMAKE_COMMAND} -E create_symlink #copy_directory
-        "${CMAKE_SOURCE_DIR}/textures"
-        "${CMAKE_BINARY_DIR}/textures"
-)
-
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    #COMMAND ${CMAKE_COMMAND} -E make_directory "${PROJECT_BINARY_DIR}/viking_room/"
-    COMMAND ${CMAKE_COMMAND} -E create_symlink #copy_directory
-        "${CMAKE_SOURCE_DIR}/viking_room"
-        "${CMAKE_BINARY_DIR}/viking_room"
-)
-
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E create_symlink #copy_directory
-        "${CMAKE_SOURCE_DIR}/assets"
-        "${CMAKE_BINARY_DIR}/assets"
-)
 
 # if(HAS_CLANGD)
 #     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
